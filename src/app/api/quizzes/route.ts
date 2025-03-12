@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { Prisma, QuizType, QuizStatus } from '@prisma/client';
 import { ApiError } from '@/services/api/errors/ApiError';
+import { Prisma, QuizStatus, QuizType } from '@prisma/client';
+import { NextRequest, NextResponse } from 'next/server';
 
 interface CreateQuizRequest {
   title: string;
@@ -28,39 +28,98 @@ export async function GET(request: NextRequest) {
       ...(type && { quizType: type }),
     };
 
-    const [quizzes, total] = await Promise.all([
-      prisma.quiz.findMany({
-        where,
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          template: {
-            select: {
-              id: true,
-              name: true,
-              quizType: true,
-            },
-          },
-        },
-      }),
-      prisma.quiz.count({ where }),
-    ]);
+    // Add timeout and retry logic
+    const MAX_RETRIES = 3;
+    const TIMEOUT = 5000; // 5 seconds
 
-    return NextResponse.json({
-      data: quizzes,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    });
-  } catch (error) {
-    if (error instanceof ApiError) {
-      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    let retryCount = 0;
+    let lastError: any;
+
+    while (retryCount < MAX_RETRIES) {
+      try {
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Database operation timed out')), TIMEOUT);
+        });
+
+        const dbOperation = Promise.all([
+          prisma.quiz.findMany({
+            where,
+            skip: (page - 1) * limit,
+            take: limit,
+            orderBy: { createdAt: 'desc' },
+            include: {
+              template: {
+                select: {
+                  id: true,
+                  name: true,
+                  quizType: true,
+                },
+              },
+            },
+          }),
+          prisma.quiz.count({ where }),
+        ]);
+
+        const [quizzes, total] = await Promise.race([timeoutPromise, dbOperation]) as [any, number];
+
+        return NextResponse.json({
+          data: quizzes,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+          },
+        });
+      } catch (error) {
+        lastError = error;
+        retryCount++;
+
+        // If it's the last retry, throw the error
+        if (retryCount === MAX_RETRIES) {
+          console.error('Database operation failed after max retries:', error);
+          throw new ApiError(
+            'Database operation failed',
+            503,
+            'DATABASE_ERROR'
+          );
+        }
+
+        // Wait before retrying (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+      }
     }
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+
+    throw lastError;
+  } catch (error) {
+    console.error('Error in GET /quizzes:', error);
+
+    if (error instanceof ApiError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        { status: error.statusCode }
+      );
+    }
+
+    // Handle specific Prisma errors
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      return NextResponse.json(
+        { error: 'Database operation failed', code: error.code },
+        { status: 503 }
+      );
+    }
+
+    if (error instanceof Prisma.PrismaClientInitializationError) {
+      return NextResponse.json(
+        { error: 'Database connection failed', code: 'DATABASE_CONNECTION_ERROR' },
+        { status: 503 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: 'Internal server error', code: 'INTERNAL_SERVER_ERROR' },
+      { status: 500 }
+    );
   }
 }
 
