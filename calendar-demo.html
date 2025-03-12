@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendar Style Demo</title>
+
+    <!-- FullCalendar Core and Plugins -->
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
+
+    <style>
+        /* App Variables */
+        :root {
+            /* Premium journal-inspired colors */
+            --background: 40 30% 96%;
+            --foreground: 30 20% 15%;
+
+            --card: 40 25% 98%;
+            --card-foreground: 30 20% 15%;
+
+            --popover: 40 25% 98%;
+            --popover-foreground: 30 20% 15%;
+
+            --primary: 30 20% 15%;
+            --primary-foreground: 40 30% 98%;
+
+            --secondary: 40 15% 90%;
+            --secondary-foreground: 30 20% 15%;
+
+            --muted: 40 15% 90%;
+            --muted-foreground: 30 10% 45%;
+
+            --accent: 30 15% 25%;
+            --accent-foreground: 40 30% 98%;
+
+            --destructive: 0 75% 50%;
+            --destructive-foreground: 40 30% 98%;
+
+            --border: 40 15% 85%;
+            --input: 40 15% 90%;
+            --ring: 30 20% 15%;
+
+            --radius: 0.5rem;
+        }
+
+        /* Base styles */
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: hsl(var(--background));
+            color: hsl(var(--foreground));
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            color: hsl(var(--foreground));
+            margin-bottom: 16px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background-color: hsl(var(--card));
+            border-radius: var(--radius);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            padding: 24px;
+            border: 1px solid hsl(var(--border));
+        }
+
+        /* FullCalendar customization */
+        .fc {
+            --fc-border-color: hsl(var(--border));
+            --fc-button-bg-color: hsl(var(--primary));
+            --fc-button-border-color: hsl(var(--primary));
+            --fc-button-text-color: hsl(var(--primary-foreground));
+            --fc-button-hover-bg-color: hsl(var(--primary) / 0.9);
+            --fc-button-hover-border-color: hsl(var(--primary) / 0.9);
+            --fc-button-active-bg-color: hsl(var(--primary) / 0.8);
+            --fc-button-active-border-color: hsl(var(--primary) / 0.8);
+            --fc-event-border-color: transparent;
+            --fc-event-bg-color: hsl(var(--primary) / 0.1);
+            --fc-event-text-color: hsl(var(--primary));
+            --fc-page-bg-color: hsl(var(--background));
+            --fc-neutral-bg-color: hsl(var(--card));
+            --fc-neutral-text-color: hsl(var(--card-foreground));
+            --fc-today-bg-color: hsl(var(--primary) / 0.05);
+            --fc-list-event-hover-bg-color: hsl(var(--secondary));
+            --fc-highlight-color: hsl(var(--primary) / 0.1);
+            --fc-now-indicator-color: hsl(var(--destructive));
+        }
+
+        /* Calendar frame styling */
+        .fc .fc-view-harness {
+            background-color: hsl(var(--card));
+            border-radius: 0.5rem;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Calendar toolbar and navigation styling */
+        .fc .fc-toolbar {
+            margin-bottom: 1rem;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+        }
+
+        .fc .fc-toolbar .fc-toolbar-chunk {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .fc .fc-toolbar-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: hsl(var(--foreground));
+        }
+
+        /* Calendar button styling */
+        .fc .fc-button {
+            border-radius: 0.375rem;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            font-size: 0.875rem;
+            font-weight: 500;
+            border: 1px solid;
+            padding: 0.375rem 0.75rem;
+            transition: all 0.2s ease;
+            background: none;
+            color: hsl(var(--foreground));
+            border-color: hsl(var(--border));
+        }
+
+        .fc .fc-button-primary {
+            background-color: hsl(var(--primary));
+            color: hsl(var(--primary-foreground));
+            border-color: hsl(var(--primary));
+        }
+
+        .fc .fc-button-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .fc .fc-button-primary:not(:disabled):hover {
+            background-color: hsl(var(--primary) / 0.9);
+            border-color: hsl(var(--primary) / 0.9);
+            transform: translateY(-1px);
+        }
+
+        /* Button groups */
+        .fc .fc-button-group {
+            border-radius: 0.375rem;
+            overflow: hidden;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .fc .fc-button-group .fc-button {
+            border-radius: 0;
+            border-right: 0;
+        }
+
+        .fc .fc-button-group .fc-button:last-child {
+            border-top-right-radius: 0.375rem;
+            border-bottom-right-radius: 0.375rem;
+            border-right: 1px solid;
+        }
+
+        .fc .fc-button-group .fc-button:first-child {
+            border-top-left-radius: 0.375rem;
+            border-bottom-left-radius: 0.375rem;
+        }
+
+        .fc .fc-button-primary:not(:disabled).fc-button-active,
+        .fc .fc-button-primary:not(:disabled):active {
+            background-color: hsl(var(--primary) / 0.8);
+            border-color: hsl(var(--primary) / 0.8);
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+            transform: translateY(1px);
+        }
+
+        /* Table header (day names) */
+        .fc .fc-col-header {
+            border-bottom: 1px solid hsl(var(--border));
+        }
+
+        .fc .fc-col-header-cell {
+            font-weight: 500;
+            color: hsl(var(--foreground));
+            background-color: hsl(var(--card));
+        }
+
+        .fc .fc-col-header-cell-cushion {
+            padding: 0.5rem;
+            color: hsl(var(--foreground));
+        }
+
+        /* Month view specific */
+        .fc .fc-daygrid-day.fc-day-other {
+            background-color: hsl(var(--muted) / 0.3);
+        }
+
+        .fc .fc-daygrid-day-frame {
+            padding: 0.25rem;
+        }
+
+        .fc .fc-daygrid-day-number {
+            font-size: 0.75rem;
+            font-weight: 500;
+            padding: 0.25rem;
+            border-radius: 9999px;
+            width: 1.5rem;
+            height: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .fc .fc-day-today .fc-daygrid-day-number {
+            background-color: hsl(var(--primary));
+            color: hsl(var(--primary-foreground));
+        }
+
+        /* Event styling */
+        .fc-event {
+            border: none;
+            cursor: pointer;
+        }
+
+        /* Status colors */
+        .status-pending {
+            border-left: 2px solid #2563eb;
+            /* blue-600 */
+        }
+
+        .status-processing {
+            border-left: 2px solid #d97706;
+            /* amber-600 */
+        }
+
+        .status-published {
+            border-left: 2px solid #059669;
+            /* emerald-600 */
+        }
+
+        .status-failed {
+            border-left: 2px solid #dc2626;
+            /* red-600 */
+        }
+
+        .status-cancelled {
+            border-left: 2px solid #6b7280;
+            /* gray-500 */
+        }
+
+        /* Demo event styling */
+        .demo-event {
+            padding: 0.5rem;
+            border-radius: 0.25rem;
+            margin-bottom: 0.25rem;
+            background-color: hsl(var(--card));
+            border: 1px solid hsl(var(--border));
+            border-left-width: 2px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .demo-event-title {
+            font-size: 0.75rem;
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+        }
+
+        .demo-event-time {
+            font-size: 0.65rem;
+            color: hsl(var(--muted-foreground));
+        }
+
+        .demo-status-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.125rem 0.375rem;
+            border-radius: 9999px;
+            font-size: 0.65rem;
+            font-weight: 500;
+            margin-right: 0.25rem;
+        }
+
+        .status-badge-pending {
+            background-color: #dbeafe;
+            /* blue-100 */
+            color: #1e40af;
+            /* blue-800 */
+        }
+
+        .status-badge-processing {
+            background-color: #fef3c7;
+            /* amber-100 */
+            color: #92400e;
+            /* amber-800 */
+        }
+
+        .status-badge-published {
+            background-color: #d1fae5;
+            /* emerald-100 */
+            color: #065f46;
+            /* emerald-800 */
+        }
+
+        .status-badge-failed {
+            background-color: #fee2e2;
+            /* red-100 */
+            color: #991b1b;
+            /* red-800 */
+        }
+
+        .status-badge-cancelled {
+            background-color: #f3f4f6;
+            /* gray-100 */
+            color: #1f2937;
+            /* gray-800 */
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Calendar Style Demo</h1>
+
+        <div class="card">
+            <div id="calendar"></div>
+        </div>
+
+        <h2 style="margin-top: 2rem;">Event Status Examples</h2>
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem;">
+            <div class="demo-event status-pending">
+                <div class="demo-event-title">Pending Quiz</div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span class="demo-status-badge status-badge-pending">Pending</span>
+                    <span class="demo-event-time">9:00 AM</span>
+                </div>
+            </div>
+
+            <div class="demo-event status-processing">
+                <div class="demo-event-title">Processing Quiz</div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span class="demo-status-badge status-badge-processing">Processing</span>
+                    <span class="demo-event-time">10:30 AM</span>
+                </div>
+            </div>
+
+            <div class="demo-event status-published">
+                <div class="demo-event-title">Published Quiz</div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span class="demo-status-badge status-badge-published">Published</span>
+                    <span class="demo-event-time">12:00 PM</span>
+                </div>
+            </div>
+
+            <div class="demo-event status-failed">
+                <div class="demo-event-title">Failed Quiz</div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span class="demo-status-badge status-badge-failed">Failed</span>
+                    <span class="demo-event-time">2:15 PM</span>
+                </div>
+            </div>
+
+            <div class="demo-event status-cancelled">
+                <div class="demo-event-title">Cancelled Quiz</div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span class="demo-status-badge status-badge-cancelled">Cancelled</span>
+                    <span class="demo-event-time">4:45 PM</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const calendarEl = document.getElementById('calendar');
+
+            const calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                },
+                buttonText: {
+                    today: 'Today',
+                    month: 'Month',
+                    week: 'Week',
+                    day: 'Day'
+                },
+                events: [
+                    {
+                        title: 'Guess the French Word Quiz',
+                        start: new Date(new Date().getFullYear(), new Date().getMonth(), 10, 9, 0),
+                        className: 'status-pending',
+                        extendedProps: {
+                            status: 'PENDING'
+                        }
+                    },
+                    {
+                        title: 'Number Sequence Quiz',
+                        start: new Date(new Date().getFullYear(), new Date().getMonth(), 15, 10, 30),
+                        className: 'status-processing',
+                        extendedProps: {
+                            status: 'PROCESSING'
+                        }
+                    },
+                    {
+                        title: 'Rhyme Time Challenge',
+                        start: new Date(new Date().getFullYear(), new Date().getMonth(), 18, 12, 0),
+                        className: 'status-published',
+                        extendedProps: {
+                            status: 'PUBLISHED'
+                        }
+                    },
+                    {
+                        title: 'Connection Puzzle Quiz',
+                        start: new Date(new Date().getFullYear(), new Date().getMonth(), 22, 14, 15),
+                        className: 'status-failed',
+                        extendedProps: {
+                            status: 'FAILED'
+                        }
+                    },
+                    {
+                        title: 'Spanish Vocabulary Quiz',
+                        start: new Date(new Date().getFullYear(), new Date().getMonth(), 25, 16, 45),
+                        className: 'status-cancelled',
+                        extendedProps: {
+                            status: 'CANCELLED'
+                        }
+                    }
+                ],
+                eventContent: function (arg) {
+                    const status = arg.event.extendedProps.status;
+                    const statusClass = status.toLowerCase();
+                    const badgeClass = `status-badge-${statusClass}`;
+
+                    return {
+                        html: `
+              <div class="fc-content">
+                <div class="demo-event-title">${arg.event.title}</div>
+                <div style="display: flex; justify-content: space-between;">
+                  <span class="demo-status-badge ${badgeClass}">${status.charAt(0) + status.slice(1).toLowerCase()}</span>
+                  <span class="demo-event-time">${new Date(arg.event.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+                </div>
+              </div>
+            `
+                    };
+                }
+            });
+
+            calendar.render();
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,399 @@
+/* Calendar container styles */
+.fc {
+  --fc-border-color: hsl(var(--border));
+  --fc-page-bg-color: hsl(var(--background));
+  --fc-neutral-bg-color: hsl(var(--secondary));
+  --fc-list-event-hover-bg-color: hsl(var(--secondary));
+  --fc-today-bg-color: hsl(var(--accent) / 0.1);
+}
+
+/* Event status colors */
+.fc-event.status-pending {
+  background-color: hsl(var(--warning));
+  border-color: hsl(var(--warning));
+}
+
+.fc-event.status-processing {
+  background-color: hsl(var(--info));
+  border-color: hsl(var(--info));
+}
+
+.fc-event.status-published {
+  background-color: hsl(var(--success));
+  border-color: hsl(var(--success));
+}
+
+.fc-event.status-failed {
+  background-color: hsl(var(--destructive));
+  border-color: hsl(var(--destructive));
+}
+
+.fc-event.status-cancelled {
+  background-color: hsl(var(--muted));
+  border-color: hsl(var(--muted));
+  text-decoration: line-through;
+}
+
+/* Status dots */
+.status-dot-pending {
+  background-color: hsl(var(--warning));
+}
+
+.status-dot-processing {
+  background-color: hsl(var(--info));
+}
+
+.status-dot-published {
+  background-color: hsl(var(--success));
+}
+
+.status-dot-failed {
+  background-color: hsl(var(--destructive));
+}
+
+.status-dot-cancelled {
+  background-color: hsl(var(--muted));
+}
+
+/* Multi-day event styles */
+.fc-event .multi-day {
+  border-radius: 0.25rem;
+  margin: -1px;
+}
+
+.fc-event .multi-day::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background-color: currentColor;
+  border-top-left-radius: 0.25rem;
+  border-bottom-left-radius: 0.25rem;
+}
+
+/* Event stacking improvements */
+.fc-daygrid-day-events {
+  margin-top: 1px !important;
+}
+
+.fc-daygrid-event-harness {
+  margin-top: 1px !important;
+}
+
+.fc-event {
+  margin-top: 1px !important;
+  margin-bottom: 1px !important;
+}
+
+/* Tooltip styles */
+[data-radix-popper-content-wrapper] {
+  z-index: 50 !important;
+}
+
+/* Calendar header and controls */
+.fc .fc-toolbar {
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.fc .fc-toolbar-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.fc .fc-button-primary {
+  background-color: hsl(var(--secondary));
+  border-color: hsl(var(--border));
+  color: hsl(var(--foreground));
+  transition: all 0.2s ease;
+}
+
+.fc .fc-button-primary:not(:disabled):hover {
+  background-color: hsl(var(--secondary) / 0.8);
+  border-color: hsl(var(--border));
+}
+
+.fc .fc-button-primary:not(:disabled).fc-button-active,
+.fc .fc-button-primary:not(:disabled):active {
+  background-color: hsl(var(--primary));
+  border-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+.fc .fc-button-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Calendar grid */
+.fc .fc-scrollgrid,
+.fc .fc-scrollgrid-section > td,
+.fc th {
+  border-color: hsl(var(--border));
+}
+
+.fc .fc-daygrid-day.fc-day-today {
+  background-color: hsl(var(--accent) / 0.05);
+}
+
+.fc .fc-daygrid-day:hover {
+  background-color: hsl(var(--muted) / 0.5);
+  transition: background-color 0.2s ease;
+}
+
+.fc .fc-col-header-cell {
+  background-color: hsl(var(--card));
+  border-color: hsl(var(--border));
+}
+
+/* Event styles */
+.fc-event {
+  border: none !important;
+  background: none !important;
+  padding: 2px !important;
+}
+
+.fc-event .fc-event-main {
+  border-radius: 0.375rem;
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.fc-event .fc-content {
+  background-color: hsl(var(--card));
+  border-radius: 0.375rem;
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.fc-event:hover .fc-content {
+  transform: scale(1.02);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Status-specific styles */
+.status-pending .fc-content {
+  background-color: hsl(221.2 83.2% 96%);
+  border-color: hsl(221.2 83.2% 90%);
+}
+
+.dark .status-pending .fc-content {
+  background-color: hsl(221.2 83.2% 20%);
+  border-color: hsl(221.2 83.2% 30%);
+}
+
+.status-processing .fc-content {
+  background-color: hsl(24.6 95% 96%);
+  border-color: hsl(24.6 95% 90%);
+}
+
+.dark .status-processing .fc-content {
+  background-color: hsl(24.6 95% 20%);
+  border-color: hsl(24.6 95% 30%);
+}
+
+.status-published .fc-content {
+  background-color: hsl(142.1 76.2% 96%);
+  border-color: hsl(142.1 76.2% 90%);
+}
+
+.dark .status-published .fc-content {
+  background-color: hsl(142.1 76.2% 20%);
+  border-color: hsl(142.1 76.2% 30%);
+}
+
+.status-failed .fc-content {
+  background-color: hsl(0 84.2% 96%);
+  border-color: hsl(0 84.2% 90%);
+}
+
+.dark .status-failed .fc-content {
+  background-color: hsl(0 84.2% 20%);
+  border-color: hsl(0 84.2% 30%);
+}
+
+.status-cancelled .fc-content {
+  background-color: hsl(215 16% 96%);
+  border-color: hsl(215 16% 90%);
+  text-decoration: line-through;
+  opacity: 0.75;
+}
+
+.dark .status-cancelled .fc-content {
+  background-color: hsl(215 16% 20%);
+  border-color: hsl(215 16% 30%);
+}
+
+/* Event content */
+.fc-event .fc-content img {
+  border-radius: 0.125rem;
+  object-fit: cover;
+}
+
+.fc-event .fc-content .text-xs {
+  color: hsl(var(--foreground));
+  font-weight: 500;
+}
+
+.fc-event .fc-content .text-\[10px\] {
+  color: hsl(var(--muted-foreground));
+}
+
+/* Time grid specific */
+.fc-timegrid-slot {
+  border-color: hsl(var(--border));
+}
+
+.fc-timegrid-now-indicator-line {
+  border-color: hsl(var(--primary));
+}
+
+/* List view specific */
+.fc-list {
+  border-color: hsl(var(--border));
+}
+
+.fc-list-day-cushion {
+  background-color: hsl(var(--card));
+}
+
+/* More events popover */
+.fc-more-popover {
+  background-color: hsl(var(--popover));
+  border-color: hsl(var(--border));
+  border-radius: 0.375rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.fc-more-popover .fc-popover-title {
+  background-color: hsl(var(--muted));
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .fc .fc-toolbar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+  
+  .fc .fc-toolbar-title {
+    text-align: center;
+  }
+}
+
+/* Drag and drop styles */
+.fc-event.fc-event-dragging {
+  opacity: 0.7;
+  cursor: move;
+}
+
+.fc-event.fc-event-dragging .fc-content {
+  transform: scale(1.05);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.fc-event[data-status="pending"] {
+  cursor: move;
+}
+
+.fc-event:not([data-status="pending"]) {
+  cursor: not-allowed;
+}
+
+/* Event hover states */
+.fc-event:hover .fc-content {
+  transform: scale(1.02);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Loading state */
+.fc-event.is-loading .fc-content {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* Occupied time slot indicator */
+.fc-timegrid-slot.occupied {
+  background-color: hsl(var(--muted) / 0.1);
+}
+
+/* Conflict indicator */
+.fc-event.conflict {
+  z-index: 5;
+}
+
+.fc-event.conflict .fc-content {
+  border-color: hsl(var(--destructive));
+  box-shadow: 0 0 0 2px hsl(var(--destructive) / 0.2);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 hsl(var(--destructive) / 0.2);
+  }
+  70% {
+    box-shadow: 0 0 0 6px hsl(var(--destructive) / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--destructive) / 0);
+  }
+}
+
+/* Hover effect for occupied slots */
+.fc-timegrid-slot.occupied:hover::before {
+  content: 'Time slot occupied';
+  position: absolute;
+  background-color: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  z-index: 10;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.fc-timegrid-slot.occupied:hover::before {
+  opacity: 1;
+}
+
+/* Not allowed cursor for occupied slots */
+.fc-timegrid-slot.occupied {
+  cursor: not-allowed;
+}
+
+/* Event hover states with conflict indication */
+.fc-event:hover .fc-content {
+  transform: scale(1.02);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.fc-event.conflict:hover .fc-content {
+  border-color: hsl(var(--destructive));
+  box-shadow: 0 0 0 2px hsl(var(--destructive) / 0.4);
+}
+
+/* Loading state */
+.fc-event.is-loading .fc-content {
+  opacity: 0.7;
+  pointer-events: none;
+} 

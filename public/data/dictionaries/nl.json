@@ -1,0 +1,620 @@
+{
+    "metadata": {
+        "language": "nl",
+        "wordCount": 301,
+        "lastUpdated": "2024-03-20",
+        "version": "1.1.0"
+    },
+    "words": {
+        "easy": [
+            {
+                "word": "WERELD",
+                "type": "NOUN"
+            },
+            {
+                "word": "TAFEL",
+                "type": "NOUN"
+            },
+            {
+                "word": "DEUR",
+                "type": "NOUN"
+            },
+            {
+                "word": "BOEK",
+                "type": "NOUN"
+            },
+            {
+                "word": "APPEL",
+                "type": "NOUN"
+            },
+            {
+                "word": "HOND",
+                "type": "NOUN"
+            },
+            {
+                "word": "KAT",
+                "type": "NOUN"
+            },
+            {
+                "word": "HAND",
+                "type": "NOUN"
+            },
+            {
+                "word": "BROOD",
+                "type": "NOUN"
+            },
+            {
+                "word": "MAAN",
+                "type": "NOUN"
+            },
+            {
+                "word": "VADER",
+                "type": "NOUN"
+            },
+            {
+                "word": "MOEDER",
+                "type": "NOUN"
+            },
+            {
+                "word": "SCHOOL",
+                "type": "NOUN"
+            },
+            {
+                "word": "STRAND",
+                "type": "NOUN"
+            },
+            {
+                "word": "BLOEM",
+                "type": "NOUN"
+            },
+            {
+                "word": "HART",
+                "type": "NOUN"
+            },
+            {
+                "word": "KOP",
+                "type": "NOUN"
+            },
+            {
+                "word": "DOOS",
+                "type": "NOUN"
+            },
+            {
+                "word": "JURK",
+                "type": "NOUN"
+            },
+            {
+                "word": "KAMER",
+                "type": "NOUN"
+            },
+            {
+                "word": "BOOM",
+                "type": "NOUN"
+            },
+            {
+                "word": "ROOD",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "BLAUW",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "ZWART",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "WIT",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "GROEN",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "GEEL",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "ROZE",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "ZOET",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "MOOI",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "GROOT",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "ZIJN",
+                "type": "VERB"
+            },
+            {
+                "word": "HEBBEN",
+                "type": "VERB"
+            },
+            {
+                "word": "GAAN",
+                "type": "VERB"
+            },
+            {
+                "word": "ZIEN",
+                "type": "VERB"
+            },
+            {
+                "word": "ZEGGEN",
+                "type": "VERB"
+            },
+            {
+                "word": "MAKEN",
+                "type": "VERB"
+            },
+            {
+                "word": "KOMEN",
+                "type": "VERB"
+            },
+            {
+                "word": "LEZEN",
+                "type": "VERB"
+            },
+            {
+                "word": "LACHEN",
+                "type": "VERB"
+            },
+            {
+                "word": "SPELEN",
+                "type": "VERB"
+            },
+            {
+                "word": "DANK",
+                "type": "COMMON"
+            },
+            {
+                "word": "HALLO",
+                "type": "COMMON"
+            },
+            {
+                "word": "BABY",
+                "type": "COMMON"
+            },
+            {
+                "word": "KOFFIE",
+                "type": "COMMON"
+            },
+            {
+                "word": "HIER",
+                "type": "COMMON"
+            },
+            {
+                "word": "DAN",
+                "type": "COMMON"
+            },
+            {
+                "word": "OOK",
+                "type": "COMMON"
+            },
+            {
+                "word": "ZOALS",
+                "type": "COMMON"
+            },
+            {
+                "word": "GOED",
+                "type": "COMMON"
+            },
+            {
+                "word": "ZEER",
+                "type": "COMMON"
+            }
+        ],
+        "medium": [
+            {
+                "word": "TELEVISIE",
+                "type": "NOUN"
+            },
+            {
+                "word": "MUSEUM",
+                "type": "NOUN"
+            },
+            {
+                "word": "METRO",
+                "type": "NOUN"
+            },
+            {
+                "word": "BOS",
+                "type": "NOUN"
+            },
+            {
+                "word": "HOTEL",
+                "type": "NOUN"
+            },
+            {
+                "word": "STUDENT",
+                "type": "NOUN"
+            },
+            {
+                "word": "JAAR",
+                "type": "NOUN"
+            },
+            {
+                "word": "IDEE",
+                "type": "NOUN"
+            },
+            {
+                "word": "CAFÉ",
+                "type": "NOUN"
+            },
+            {
+                "word": "TERRAS",
+                "type": "NOUN"
+            },
+            {
+                "word": "BROER",
+                "type": "NOUN"
+            },
+            {
+                "word": "ZUS",
+                "type": "NOUN"
+            },
+            {
+                "word": "BABY",
+                "type": "NOUN"
+            },
+            {
+                "word": "THESE",
+                "type": "NOUN"
+            },
+            {
+                "word": "KUST",
+                "type": "NOUN"
+            },
+            {
+                "word": "FEEST",
+                "type": "NOUN"
+            },
+            {
+                "word": "HOOFD",
+                "type": "NOUN"
+            },
+            {
+                "word": "BEEST",
+                "type": "NOUN"
+            },
+            {
+                "word": "DROOM",
+                "type": "NOUN"
+            },
+            {
+                "word": "VISSEN",
+                "type": "NOUN"
+            },
+            {
+                "word": "CREËREN",
+                "type": "VERB"
+            },
+            {
+                "word": "DROMEN",
+                "type": "VERB"
+            },
+            {
+                "word": "VISSEN",
+                "type": "VERB"
+            },
+            {
+                "word": "STUDEREN",
+                "type": "VERB"
+            },
+            {
+                "word": "LENEN",
+                "type": "VERB"
+            },
+            {
+                "word": "DENKEN",
+                "type": "VERB"
+            },
+            {
+                "word": "LEVEN",
+                "type": "VERB"
+            },
+            {
+                "word": "SPREKEN",
+                "type": "VERB"
+            },
+            {
+                "word": "ETEN",
+                "type": "VERB"
+            },
+            {
+                "word": "HOUDEN",
+                "type": "VERB"
+            },
+            {
+                "word": "VEROUDERD",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "LICHT",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "VERHOOGD",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "GEHAAST",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "DOORBOORD",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "GESLOTEN",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "VERLEDEN",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "PRIVÉ",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "GOUDEN",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "DONKER",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "NA",
+                "type": "COMMON"
+            },
+            {
+                "word": "BEGIN",
+                "type": "COMMON"
+            },
+            {
+                "word": "KANT",
+                "type": "COMMON"
+            },
+            {
+                "word": "AL",
+                "type": "COMMON"
+            },
+            {
+                "word": "DAAR",
+                "type": "COMMON"
+            },
+            {
+                "word": "DANKZIJ",
+                "type": "COMMON"
+            },
+            {
+                "word": "ZELFDE",
+                "type": "COMMON"
+            },
+            {
+                "word": "KLAAR",
+                "type": "COMMON"
+            },
+            {
+                "word": "STOP",
+                "type": "COMMON"
+            },
+            {
+                "word": "KAN",
+                "type": "COMMON"
+            }
+        ],
+        "hard": [
+            {
+                "word": "MEESTERWERK",
+                "type": "NOUN"
+            },
+            {
+                "word": "THEATER",
+                "type": "NOUN"
+            },
+            {
+                "word": "GEDICHT",
+                "type": "NOUN"
+            },
+            {
+                "word": "SCÈNE",
+                "type": "NOUN"
+            },
+            {
+                "word": "MEESTER",
+                "type": "NOUN"
+            },
+            {
+                "word": "ROL",
+                "type": "NOUN"
+            },
+            {
+                "word": "PRIESTER",
+                "type": "NOUN"
+            },
+            {
+                "word": "PANNENKOEK",
+                "type": "NOUN"
+            },
+            {
+                "word": "DEEG",
+                "type": "NOUN"
+            },
+            {
+                "word": "TAART",
+                "type": "NOUN"
+            },
+            {
+                "word": "VUURTOREN",
+                "type": "NOUN"
+            },
+            {
+                "word": "JACHT",
+                "type": "NOUN"
+            },
+            {
+                "word": "ZEBRA",
+                "type": "NOUN"
+            },
+            {
+                "word": "ZOEKTOCHT",
+                "type": "NOUN"
+            },
+            {
+                "word": "BEUK",
+                "type": "NOUN"
+            },
+            {
+                "word": "GEWELF",
+                "type": "NOUN"
+            },
+            {
+                "word": "KETTING",
+                "type": "NOUN"
+            },
+            {
+                "word": "STUK",
+                "type": "NOUN"
+            },
+            {
+                "word": "ROOM",
+                "type": "NOUN"
+            },
+            {
+                "word": "BOOMSTAM",
+                "type": "NOUN"
+            },
+            {
+                "word": "GEBOREN",
+                "type": "VERB"
+            },
+            {
+                "word": "GROEIEN",
+                "type": "VERB"
+            },
+            {
+                "word": "BEHAGEN",
+                "type": "VERB"
+            },
+            {
+                "word": "SLEPEN",
+                "type": "VERB"
+            },
+            {
+                "word": "GENEZEN",
+                "type": "VERB"
+            },
+            {
+                "word": "MENGEN",
+                "type": "VERB"
+            },
+            {
+                "word": "BIDDEN",
+                "type": "VERB"
+            },
+            {
+                "word": "PROEVEN",
+                "type": "VERB"
+            },
+            {
+                "word": "ROOSTEREN",
+                "type": "VERB"
+            },
+            {
+                "word": "VIEREN",
+                "type": "VERB"
+            },
+            {
+                "word": "HOOGSTE",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "EXTREEM",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "OPRECHT",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "STRENG",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "ANGSTIG",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "VERS",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "VREEMD",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "SPECIAAL",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "GEHEEL",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "PRECIES",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "EERDER",
+                "type": "COMMON"
+            },
+            {
+                "word": "ONDANKS",
+                "type": "COMMON"
+            },
+            {
+                "word": "NABIJ",
+                "type": "COMMON"
+            },
+            {
+                "word": "HIERHEEN",
+                "type": "COMMON"
+            },
+            {
+                "word": "DAARHEEN",
+                "type": "COMMON"
+            },
+            {
+                "word": "BEHALVE",
+                "type": "COMMON"
+            },
+            {
+                "word": "VOORBIJ",
+                "type": "COMMON"
+            },
+            {
+                "word": "ONDER",
+                "type": "COMMON"
+            },
+            {
+                "word": "VOLGENS",
+                "type": "COMMON"
+            },
+            {
+                "word": "DANKZIJ",
+                "type": "COMMON"
+            }
+        ]
+    }
+}

@@ -1,0 +1,426 @@
+
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              /* Reset styles */
+              * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+              }
+
+              /* Font faces */
+              @font-face {
+                font-family: 'Rooftop';
+                src: url('/fonts/Rooftop-Regular.otf') format('opentype');
+                font-weight: 400;
+                font-style: normal;
+                font-display: swap;
+              }
+
+              @font-face {
+                font-family: 'Rooftop';
+                src: url('/fonts/Rooftop-Bold.otf') format('opentype');
+                font-weight: 700;
+                font-style: normal;
+                font-display: swap;
+              }
+
+              /* Global styles */
+              @tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'Rooftop';
+  src: url('/fonts/Rooftop-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Rooftop';
+  src: url('/fonts/Rooftop-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    --font-rooftop-regular: var(--font-rooftop-regular);
+    --font-rooftop-bold: var(--font-rooftop-bold);
+    --font-geist: var(--font-geist);
+    
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+    --radius: 0.5rem;
+  }
+  .dark {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 83.1%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Rooftop', system-ui, sans-serif;
+    font-size: 1.125rem;
+    line-height: 1.75;
+  }
+  h1, h2, h3, h4 {
+    font-family: 'Rooftop', system-ui, sans-serif;
+    font-weight: 700;
+    @apply tracking-tight text-foreground;
+  }
+  h1 {
+    @apply text-5xl lg:text-6xl mb-2;
+    line-height: 1.1;
+  }
+  h2 {
+    @apply text-4xl lg:text-5xl mb-6;
+    line-height: 1.2;
+  }
+  h3 {
+    @apply text-3xl lg:text-4xl mb-4;
+    line-height: 1.3;
+  }
+  h4 {
+    @apply text-2xl lg:text-3xl mb-3;
+    line-height: 1.4;
+  }
+  .card-title {
+    font-family: 'Rooftop', system-ui, sans-serif;
+    font-weight: 400;
+    @apply text-xl font-semibold text-foreground;
+  }
+  .nav-link {
+    @apply text-lg text-muted-foreground hover:text-foreground transition-colors;
+  }
+  /* Add tighter spacing for subtitles */
+  h1 + p {
+    @apply mt-0;
+  }
+}
+
+/* Custom Typography */
+@layer base {
+  h1 {
+    font-family: 'Rooftop', system-ui, sans-serif;
+    font-weight: 700;
+    @apply text-[3.5rem] font-bold leading-tight tracking-[-0.02em];
+  }
+
+  h2 {
+    font-family: 'Rooftop', system-ui, sans-serif;
+    font-weight: 700;
+    @apply text-[2.25rem] font-bold leading-tight tracking-[-0.01em];
+  }
+
+  h3 {
+    font-family: 'Rooftop', system-ui, sans-serif;
+    font-weight: 700;
+    @apply text-[1.875rem] font-bold leading-snug;
+  }
+
+  h4 {
+    font-family: 'Rooftop', system-ui, sans-serif;
+    font-weight: 700;
+    @apply text-[1.5rem] font-bold leading-snug;
+  }
+
+  body {
+    font-family: 'Rooftop', system-ui, sans-serif;
+    font-weight: 400;
+    @apply text-[1.125rem] leading-relaxed;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .text-lg {
+    @apply text-[1.25rem] leading-relaxed;
+  }
+
+  .text-xl {
+    @apply text-[1.5rem] leading-relaxed;
+  }
+
+  .text-2xl {
+    @apply text-[2rem] leading-snug;
+  }
+
+  .text-3xl {
+    @apply text-[2.5rem] leading-snug;
+  }
+}
+
+
+              /* Template styles */
+              
+    .quiz-template {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #1a365d 0%, #2d3748 100%);
+      color: #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      padding: 3rem;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    .quiz-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .quiz-header h1 {
+      font-size: 3rem;
+      font-weight: 700;
+      margin: 0;
+      line-height: 1.2;
+      background: linear-gradient(135deg, #60a5fa 0%, #c084fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .subtitle {
+      font-size: 1.25rem;
+      margin-top: 0.75rem;
+      color: #94a3b8;
+    }
+
+    .instructions-legend {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-bottom: 2rem;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 1.5rem 2rem;
+      border-radius: 12px;
+      width: 100%;
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .legend-box {
+      width: 1.5rem;
+      height: 1.5rem;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+
+    .legend-box.correct {
+      background: linear-gradient(135deg, #34d399 0%, #059669 100%);
+      box-shadow: 0 2px 8px rgba(52, 211, 153, 0.2);
+    }
+
+    .legend-box.misplaced {
+      background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+      box-shadow: 0 2px 8px rgba(251, 191, 36, 0.2);
+    }
+
+    .legend-box.wrong {
+      background: linear-gradient(135deg, #4b5563 0%, #1f2937 100%);
+      box-shadow: 0 2px 8px rgba(75, 85, 99, 0.2);
+    }
+
+    .legend-text {
+      font-size: 0.9rem;
+      color: #94a3b8;
+      line-height: 1.4;
+    }
+
+    .quiz-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2rem;
+    }
+
+    .word-grid-container {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .word-attempt {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      width: 100%;
+      justify-content: center;
+    }
+
+    .word-grid-row {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: center;
+    }
+
+    .letter-box {
+      width: 6rem;
+      height: 6rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 4rem;
+      font-weight: 600;
+      border-radius: 12px;
+      text-transform: uppercase;
+      transition: all 0.3s ease;
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .letter-box.correct {
+      background: linear-gradient(135deg, #34d399 0%, #059669 100%);
+      color: white;
+      box-shadow: 0 4px 12px rgba(52, 211, 153, 0.2);
+      border: none;
+    }
+
+    .letter-box.misplaced {
+      background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+      color: white;
+      box-shadow: 0 4px 12px rgba(251, 191, 36, 0.2);
+      border: none;
+    }
+
+    .letter-box.wrong {
+      background: linear-gradient(135deg, #4b5563 0%, #1f2937 100%);
+      color: #94a3b8;
+      box-shadow: 0 4px 12px rgba(75, 85, 99, 0.2);
+      border: none;
+    }
+
+    .quiz-footer {
+      text-align: center;
+      margin-top: 3rem;
+      padding: 1.5rem 2rem;
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(8px);
+      border-radius: 12px;
+      width: 100%;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .branding {
+      font-size: 1rem;
+      color: #94a3b8;
+      background: linear-gradient(135deg, #60a5fa 0%, #c084fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+  
+
+              /* Container styles - simplified for direct rendering */
+              body {
+                width: 1080px;
+                height: 1080px;
+                background: white;
+              }
+            </style>
+          </head>
+          <body>
+            
+    <div class="quiz-template">
+      <div class="quiz-header">
+        <h1>"Saurez-vous deviner le mot mystère?"</h1>
+        <p class="subtitle">Devinez les mots cachés et testez vos compétences linguistiques dans ce jeu captivant! Participez dès maintenant!</p>
+      </div>
+      <div class="quiz-content">
+        <div class="instructions-legend">
+          <div class="legend-item">
+            <div class="legend-box correct"></div>
+            <span class="legend-text">Bravo, tu as trouvé une lettre à la bonne place !</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-box misplaced"></div>
+            <span class="legend-text">Cette lettre est dans le mot, mais pas à la bonne place.</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-box wrong"></div>
+            <span class="legend-text">Dommage, cette lettre n'est pas dans le mot.</span>
+          </div>
+        </div>
+        <div class="word-grid-container"><div class="word-attempt">
+        <div class="word-grid-row"><div class="letter-box misplaced">L</div><div class="letter-box wrong">Y</div><div class="letter-box wrong">F</div><div class="letter-box wrong">Z</div><div class="letter-box wrong">F</div></div>
+      </div>
+<div class="word-attempt">
+        <div class="word-grid-row"><div class="letter-box misplaced">A</div><div class="letter-box wrong">U</div><div class="letter-box wrong">B</div><div class="letter-box wrong">Q</div><div class="letter-box correct">E</div></div>
+      </div>
+<div class="word-attempt">
+        <div class="word-grid-row"><div class="letter-box wrong">F</div><div class="letter-box misplaced">L</div><div class="letter-box wrong">K</div><div class="letter-box correct">L</div><div class="letter-box wrong">W</div></div>
+      </div></div>
+      </div>
+      <div class="quiz-footer">
+        <p class="branding">Devine et gagne!</p>
+      </div>
+    </div>
+  
+          </body>
+        </html>
+      

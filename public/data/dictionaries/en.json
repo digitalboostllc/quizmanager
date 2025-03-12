@@ -1,0 +1,620 @@
+{
+    "metadata": {
+        "language": "en",
+        "wordCount": 301,
+        "lastUpdated": "2024-03-20",
+        "version": "1.1.0"
+    },
+    "words": {
+        "easy": [
+            {
+                "word": "WORLD",
+                "type": "NOUN"
+            },
+            {
+                "word": "TABLE",
+                "type": "NOUN"
+            },
+            {
+                "word": "DOOR",
+                "type": "NOUN"
+            },
+            {
+                "word": "BOOK",
+                "type": "NOUN"
+            },
+            {
+                "word": "APPLE",
+                "type": "NOUN"
+            },
+            {
+                "word": "DOG",
+                "type": "NOUN"
+            },
+            {
+                "word": "CAT",
+                "type": "NOUN"
+            },
+            {
+                "word": "HAND",
+                "type": "NOUN"
+            },
+            {
+                "word": "BREAD",
+                "type": "NOUN"
+            },
+            {
+                "word": "MOON",
+                "type": "NOUN"
+            },
+            {
+                "word": "FATHER",
+                "type": "NOUN"
+            },
+            {
+                "word": "MOTHER",
+                "type": "NOUN"
+            },
+            {
+                "word": "SCHOOL",
+                "type": "NOUN"
+            },
+            {
+                "word": "BEACH",
+                "type": "NOUN"
+            },
+            {
+                "word": "FLOWER",
+                "type": "NOUN"
+            },
+            {
+                "word": "HEART",
+                "type": "NOUN"
+            },
+            {
+                "word": "CUP",
+                "type": "NOUN"
+            },
+            {
+                "word": "BOX",
+                "type": "NOUN"
+            },
+            {
+                "word": "DRESS",
+                "type": "NOUN"
+            },
+            {
+                "word": "ROOM",
+                "type": "NOUN"
+            },
+            {
+                "word": "TREE",
+                "type": "NOUN"
+            },
+            {
+                "word": "RED",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "BLUE",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "BLACK",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "WHITE",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "GREEN",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "YELLOW",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "PINK",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "SWEET",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "BEAUTIFUL",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "BIG",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "BE",
+                "type": "VERB"
+            },
+            {
+                "word": "HAVE",
+                "type": "VERB"
+            },
+            {
+                "word": "GO",
+                "type": "VERB"
+            },
+            {
+                "word": "SEE",
+                "type": "VERB"
+            },
+            {
+                "word": "SAY",
+                "type": "VERB"
+            },
+            {
+                "word": "MAKE",
+                "type": "VERB"
+            },
+            {
+                "word": "COME",
+                "type": "VERB"
+            },
+            {
+                "word": "READ",
+                "type": "VERB"
+            },
+            {
+                "word": "LAUGH",
+                "type": "VERB"
+            },
+            {
+                "word": "PLAY",
+                "type": "VERB"
+            },
+            {
+                "word": "THANKS",
+                "type": "COMMON"
+            },
+            {
+                "word": "HELLO",
+                "type": "COMMON"
+            },
+            {
+                "word": "BABY",
+                "type": "COMMON"
+            },
+            {
+                "word": "COFFEE",
+                "type": "COMMON"
+            },
+            {
+                "word": "THERE",
+                "type": "COMMON"
+            },
+            {
+                "word": "THEN",
+                "type": "COMMON"
+            },
+            {
+                "word": "ALSO",
+                "type": "COMMON"
+            },
+            {
+                "word": "LIKE",
+                "type": "COMMON"
+            },
+            {
+                "word": "WELL",
+                "type": "COMMON"
+            },
+            {
+                "word": "VERY",
+                "type": "COMMON"
+            }
+        ],
+        "medium": [
+            {
+                "word": "TELEVISION",
+                "type": "NOUN"
+            },
+            {
+                "word": "MUSEUM",
+                "type": "NOUN"
+            },
+            {
+                "word": "SUBWAY",
+                "type": "NOUN"
+            },
+            {
+                "word": "FOREST",
+                "type": "NOUN"
+            },
+            {
+                "word": "HOTEL",
+                "type": "NOUN"
+            },
+            {
+                "word": "STUDENT",
+                "type": "NOUN"
+            },
+            {
+                "word": "YEAR",
+                "type": "NOUN"
+            },
+            {
+                "word": "IDEA",
+                "type": "NOUN"
+            },
+            {
+                "word": "CAFÉ",
+                "type": "NOUN"
+            },
+            {
+                "word": "PATIO",
+                "type": "NOUN"
+            },
+            {
+                "word": "BROTHER",
+                "type": "NOUN"
+            },
+            {
+                "word": "SISTER",
+                "type": "NOUN"
+            },
+            {
+                "word": "INFANT",
+                "type": "NOUN"
+            },
+            {
+                "word": "THESIS",
+                "type": "NOUN"
+            },
+            {
+                "word": "COAST",
+                "type": "NOUN"
+            },
+            {
+                "word": "PARTY",
+                "type": "NOUN"
+            },
+            {
+                "word": "HEAD",
+                "type": "NOUN"
+            },
+            {
+                "word": "BEAST",
+                "type": "NOUN"
+            },
+            {
+                "word": "DREAM",
+                "type": "NOUN"
+            },
+            {
+                "word": "FISHING",
+                "type": "NOUN"
+            },
+            {
+                "word": "CREATE",
+                "type": "VERB"
+            },
+            {
+                "word": "DREAM",
+                "type": "VERB"
+            },
+            {
+                "word": "FISH",
+                "type": "VERB"
+            },
+            {
+                "word": "STUDY",
+                "type": "VERB"
+            },
+            {
+                "word": "LEND",
+                "type": "VERB"
+            },
+            {
+                "word": "THINK",
+                "type": "VERB"
+            },
+            {
+                "word": "LIVE",
+                "type": "VERB"
+            },
+            {
+                "word": "SPEAK",
+                "type": "VERB"
+            },
+            {
+                "word": "EAT",
+                "type": "VERB"
+            },
+            {
+                "word": "LOVE",
+                "type": "VERB"
+            },
+            {
+                "word": "AGED",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "LIGHT",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "RAISED",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "RUSHED",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "PIERCED",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "CLOSED",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "PAST",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "PRIVATE",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "GOLDEN",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "DARK",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "AFTER",
+                "type": "COMMON"
+            },
+            {
+                "word": "BEGINNING",
+                "type": "COMMON"
+            },
+            {
+                "word": "SIDE",
+                "type": "COMMON"
+            },
+            {
+                "word": "ALREADY",
+                "type": "COMMON"
+            },
+            {
+                "word": "THERE",
+                "type": "COMMON"
+            },
+            {
+                "word": "THANKS",
+                "type": "COMMON"
+            },
+            {
+                "word": "SAME",
+                "type": "COMMON"
+            },
+            {
+                "word": "READY",
+                "type": "COMMON"
+            },
+            {
+                "word": "STOP",
+                "type": "COMMON"
+            },
+            {
+                "word": "CAN",
+                "type": "COMMON"
+            }
+        ],
+        "hard": [
+            {
+                "word": "MASTERPIECE",
+                "type": "NOUN"
+            },
+            {
+                "word": "THEATER",
+                "type": "NOUN"
+            },
+            {
+                "word": "POEM",
+                "type": "NOUN"
+            },
+            {
+                "word": "SCENE",
+                "type": "NOUN"
+            },
+            {
+                "word": "MASTER",
+                "type": "NOUN"
+            },
+            {
+                "word": "ROLE",
+                "type": "NOUN"
+            },
+            {
+                "word": "PRIEST",
+                "type": "NOUN"
+            },
+            {
+                "word": "PANCAKE",
+                "type": "NOUN"
+            },
+            {
+                "word": "DOUGH",
+                "type": "NOUN"
+            },
+            {
+                "word": "CAKE",
+                "type": "NOUN"
+            },
+            {
+                "word": "LIGHTHOUSE",
+                "type": "NOUN"
+            },
+            {
+                "word": "YACHT",
+                "type": "NOUN"
+            },
+            {
+                "word": "ZEBRA",
+                "type": "NOUN"
+            },
+            {
+                "word": "QUEST",
+                "type": "NOUN"
+            },
+            {
+                "word": "BEECH",
+                "type": "NOUN"
+            },
+            {
+                "word": "VAULT",
+                "type": "NOUN"
+            },
+            {
+                "word": "CHAIN",
+                "type": "NOUN"
+            },
+            {
+                "word": "PIECE",
+                "type": "NOUN"
+            },
+            {
+                "word": "CREAM",
+                "type": "NOUN"
+            },
+            {
+                "word": "LOG",
+                "type": "NOUN"
+            },
+            {
+                "word": "BORN",
+                "type": "VERB"
+            },
+            {
+                "word": "GROW",
+                "type": "VERB"
+            },
+            {
+                "word": "PLEASE",
+                "type": "VERB"
+            },
+            {
+                "word": "DRAG",
+                "type": "VERB"
+            },
+            {
+                "word": "HEAL",
+                "type": "VERB"
+            },
+            {
+                "word": "MIX",
+                "type": "VERB"
+            },
+            {
+                "word": "PRAYER",
+                "type": "VERB"
+            },
+            {
+                "word": "TASTE",
+                "type": "VERB"
+            },
+            {
+                "word": "ROAST",
+                "type": "VERB"
+            },
+            {
+                "word": "CELEBRATE",
+                "type": "VERB"
+            },
+            {
+                "word": "SUPREME",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "EXTREME",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "SINCERE",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "SEVERE",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "ANXIOUS",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "FRESH",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "STRANGE",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "SPECIAL",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "ENTIRE",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "PRECISE",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "RATHER",
+                "type": "COMMON"
+            },
+            {
+                "word": "DESPITE",
+                "type": "COMMON"
+            },
+            {
+                "word": "NEAR",
+                "type": "COMMON"
+            },
+            {
+                "word": "HITHER",
+                "type": "COMMON"
+            },
+            {
+                "word": "THITHER",
+                "type": "COMMON"
+            },
+            {
+                "word": "EXCEPT",
+                "type": "COMMON"
+            },
+            {
+                "word": "BEYOND",
+                "type": "COMMON"
+            },
+            {
+                "word": "AMONG",
+                "type": "COMMON"
+            },
+            {
+                "word": "ACCORDING",
+                "type": "COMMON"
+            },
+            {
+                "word": "THANKS",
+                "type": "COMMON"
+            }
+        ]
+    }
+}

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear Browser Storage for Localhost</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        h1 {
+            color: #333;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .card {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .status {
+            background: #e0f7fa;
+            border-left: 4px solid #00bcd4;
+            padding: 10px 15px;
+            margin: 10px 0;
+            border-radius: 0 4px 4px 0;
+        }
+
+        .error {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+        }
+
+        .success {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+        }
+
+        button {
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background: #1976d2;
+        }
+
+        details {
+            margin-top: 20px;
+        }
+
+        summary {
+            cursor: pointer;
+            color: #2196f3;
+            font-weight: bold;
+        }
+
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+
+        .flex {
+            display: flex;
+            gap: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Clear Browser Storage for Localhost</h1>
+
+    <div class="card">
+        <h2>Authentication Cleanup Tool</h2>
+        <p>This tool will remove all cookies, localStorage, and sessionStorage data for localhost to fix authentication
+            issues.</p>
+
+        <div id="status" class="status">
+            Ready to clean up browser storage for localhost...
+        </div>
+
+        <button id="cleanupButton">Clean All Browser Storage</button>
+        <button id="redirectButton" style="display: none;">Return to Application</button>
+
+        <details>
+            <summary>Cleanup Details</summary>
+            <div id="details">No cleanup performed yet.</div>
+        </details>
+    </div>
+
+    <script>
+        document.getElementById('cleanupButton').addEventListener('click', async function () {
+            const statusEl = document.getElementById('status');
+            const detailsEl = document.getElementById('details');
+            const redirectButton = document.getElementById('redirectButton');
+
+            statusEl.className = 'status';
+            statusEl.textContent = 'Cleaning up browser storage...';
+
+            let report = [];
+
+            try {
+                // 1. Clear all cookies for localhost
+                const cookies = document.cookie.split(';');
+                let cookiesCleared = 0;
+
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i];
+                    const eqPos = cookie.indexOf('=');
+                    const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim();
+
+                    // Multiple attempts to clear cookies with different paths and domains
+                    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+                    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=localhost`;
+                    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=.localhost`;
+                    document.cookie = `${name}=; Max-Age=0; path=/`;
+                    document.cookie = `${name}=; Max-Age=0; path=/; domain=localhost`;
+
+                    report.push(`Cleared cookie: ${name}`);
+                    cookiesCleared++;
+                }
+
+                // 2. Clear localStorage
+                const lsKeys = [];
+                let lsCleared = 0;
+
+                for (let i = 0; i < localStorage.length; i++) {
+                    lsKeys.push(localStorage.key(i));
+                }
+
+                for (const key of lsKeys) {
+                    if (key) {
+                        localStorage.removeItem(key);
+                        report.push(`Cleared localStorage item: ${key}`);
+                        lsCleared++;
+                    }
+                }
+
+                // 3. Clear sessionStorage
+                const ssKeys = [];
+                let ssCleared = 0;
+
+                for (let i = 0; i < sessionStorage.length; i++) {
+                    ssKeys.push(sessionStorage.key(i));
+                }
+
+                for (const key of ssKeys) {
+                    if (key) {
+                        sessionStorage.removeItem(key);
+                        report.push(`Cleared sessionStorage item: ${key}`);
+                        ssCleared++;
+                    }
+                }
+
+                // 4. Specifically target NextAuth items
+                const nextAuthCookies = [
+                    'next-auth.session-token',
+                    'next-auth.callback-url',
+                    'next-auth.csrf-token',
+                    'fbquiz-session',
+                    '__Secure-next-auth.session-token',
+                    '__Host-next-auth.csrf-token'
+                ];
+
+                for (const name of nextAuthCookies) {
+                    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+                    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=localhost`;
+                    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=.localhost`;
+                    document.cookie = `${name}=; Max-Age=0; path=/`;
+                    document.cookie = `${name}=; Max-Age=0; path=/; domain=localhost`;
+                    report.push(`Forced removal of NextAuth cookie: ${name}`);
+                }
+
+                // Update status
+                statusEl.className = 'status success';
+                statusEl.textContent = `Cleanup complete! Cleared ${cookiesCleared} cookies, ${lsCleared} localStorage items, and ${ssCleared} sessionStorage items.`;
+
+                // Show details
+                detailsEl.innerHTML = `<pre>${report.join('\n')}</pre>`;
+
+                // Show redirect button
+                redirectButton.style.display = 'inline-block';
+
+            } catch (error) {
+                statusEl.className = 'status error';
+                statusEl.textContent = `Error during cleanup: ${error.message}`;
+                detailsEl.innerHTML = `<pre>Error details:\n${error.stack}</pre>`;
+            }
+        });
+
+        document.getElementById('redirectButton').addEventListener('click', function () {
+            window.location.href = 'http://localhost:3000/';
+        });
+    </script>
+</body>
+
+</html>

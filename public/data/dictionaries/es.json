@@ -1,0 +1,620 @@
+{
+    "metadata": {
+        "language": "es",
+        "wordCount": 301,
+        "lastUpdated": "2024-03-20",
+        "version": "1.1.0"
+    },
+    "words": {
+        "easy": [
+            {
+                "word": "MUNDO",
+                "type": "NOUN"
+            },
+            {
+                "word": "MESA",
+                "type": "NOUN"
+            },
+            {
+                "word": "PUERTA",
+                "type": "NOUN"
+            },
+            {
+                "word": "LIBRO",
+                "type": "NOUN"
+            },
+            {
+                "word": "MANZANA",
+                "type": "NOUN"
+            },
+            {
+                "word": "PERRO",
+                "type": "NOUN"
+            },
+            {
+                "word": "GATO",
+                "type": "NOUN"
+            },
+            {
+                "word": "MANO",
+                "type": "NOUN"
+            },
+            {
+                "word": "PAN",
+                "type": "NOUN"
+            },
+            {
+                "word": "LUNA",
+                "type": "NOUN"
+            },
+            {
+                "word": "PADRE",
+                "type": "NOUN"
+            },
+            {
+                "word": "MADRE",
+                "type": "NOUN"
+            },
+            {
+                "word": "ESCUELA",
+                "type": "NOUN"
+            },
+            {
+                "word": "PLAYA",
+                "type": "NOUN"
+            },
+            {
+                "word": "FLOR",
+                "type": "NOUN"
+            },
+            {
+                "word": "CORAZÓN",
+                "type": "NOUN"
+            },
+            {
+                "word": "TAZA",
+                "type": "NOUN"
+            },
+            {
+                "word": "CAJA",
+                "type": "NOUN"
+            },
+            {
+                "word": "VESTIDO",
+                "type": "NOUN"
+            },
+            {
+                "word": "SALA",
+                "type": "NOUN"
+            },
+            {
+                "word": "ÁRBOL",
+                "type": "NOUN"
+            },
+            {
+                "word": "ROJO",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "AZUL",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "NEGRO",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "BLANCO",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "VERDE",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "AMARILLO",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "ROSA",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "DULCE",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "HERMOSO",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "GRANDE",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "SER",
+                "type": "VERB"
+            },
+            {
+                "word": "TENER",
+                "type": "VERB"
+            },
+            {
+                "word": "IR",
+                "type": "VERB"
+            },
+            {
+                "word": "VER",
+                "type": "VERB"
+            },
+            {
+                "word": "DECIR",
+                "type": "VERB"
+            },
+            {
+                "word": "HACER",
+                "type": "VERB"
+            },
+            {
+                "word": "VENIR",
+                "type": "VERB"
+            },
+            {
+                "word": "LEER",
+                "type": "VERB"
+            },
+            {
+                "word": "REÍR",
+                "type": "VERB"
+            },
+            {
+                "word": "JUGAR",
+                "type": "VERB"
+            },
+            {
+                "word": "GRACIAS",
+                "type": "COMMON"
+            },
+            {
+                "word": "HOLA",
+                "type": "COMMON"
+            },
+            {
+                "word": "BEBÉ",
+                "type": "COMMON"
+            },
+            {
+                "word": "CAFÉ",
+                "type": "COMMON"
+            },
+            {
+                "word": "AHORA",
+                "type": "COMMON"
+            },
+            {
+                "word": "ENTONCES",
+                "type": "COMMON"
+            },
+            {
+                "word": "TAMBIÉN",
+                "type": "COMMON"
+            },
+            {
+                "word": "COMO",
+                "type": "COMMON"
+            },
+            {
+                "word": "BIEN",
+                "type": "COMMON"
+            },
+            {
+                "word": "MUY",
+                "type": "COMMON"
+            }
+        ],
+        "medium": [
+            {
+                "word": "TELEVISIÓN",
+                "type": "NOUN"
+            },
+            {
+                "word": "MUSEO",
+                "type": "NOUN"
+            },
+            {
+                "word": "METRO",
+                "type": "NOUN"
+            },
+            {
+                "word": "BOSQUE",
+                "type": "NOUN"
+            },
+            {
+                "word": "HOTEL",
+                "type": "NOUN"
+            },
+            {
+                "word": "ESTUDIANTE",
+                "type": "NOUN"
+            },
+            {
+                "word": "AÑO",
+                "type": "NOUN"
+            },
+            {
+                "word": "IDEA",
+                "type": "NOUN"
+            },
+            {
+                "word": "CAFÉ",
+                "type": "NOUN"
+            },
+            {
+                "word": "PATIO",
+                "type": "NOUN"
+            },
+            {
+                "word": "HERMANO",
+                "type": "NOUN"
+            },
+            {
+                "word": "HERMANA",
+                "type": "NOUN"
+            },
+            {
+                "word": "BEBÉ",
+                "type": "NOUN"
+            },
+            {
+                "word": "TESIS",
+                "type": "NOUN"
+            },
+            {
+                "word": "COSTA",
+                "type": "NOUN"
+            },
+            {
+                "word": "FIESTA",
+                "type": "NOUN"
+            },
+            {
+                "word": "CABEZA",
+                "type": "NOUN"
+            },
+            {
+                "word": "BESTIA",
+                "type": "NOUN"
+            },
+            {
+                "word": "SUEÑO",
+                "type": "NOUN"
+            },
+            {
+                "word": "PESCA",
+                "type": "NOUN"
+            },
+            {
+                "word": "CREAR",
+                "type": "VERB"
+            },
+            {
+                "word": "SOÑAR",
+                "type": "VERB"
+            },
+            {
+                "word": "PESCAR",
+                "type": "VERB"
+            },
+            {
+                "word": "ESTUDIAR",
+                "type": "VERB"
+            },
+            {
+                "word": "PRESTAR",
+                "type": "VERB"
+            },
+            {
+                "word": "PENSAR",
+                "type": "VERB"
+            },
+            {
+                "word": "VIVIR",
+                "type": "VERB"
+            },
+            {
+                "word": "HABLAR",
+                "type": "VERB"
+            },
+            {
+                "word": "COMER",
+                "type": "VERB"
+            },
+            {
+                "word": "AMAR",
+                "type": "VERB"
+            },
+            {
+                "word": "EDAD",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "LIGERO",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "ELEVADO",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "APRESSURADO",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "PERFORADO",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "CERRADO",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "PASADO",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "PRIVADO",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "DORADO",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "OSCURO",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "DESPUÉS",
+                "type": "COMMON"
+            },
+            {
+                "word": "COMIENZO",
+                "type": "COMMON"
+            },
+            {
+                "word": "LADO",
+                "type": "COMMON"
+            },
+            {
+                "word": "YA",
+                "type": "COMMON"
+            },
+            {
+                "word": "AHÍ",
+                "type": "COMMON"
+            },
+            {
+                "word": "GRACIA",
+                "type": "COMMON"
+            },
+            {
+                "word": "MISMO",
+                "type": "COMMON"
+            },
+            {
+                "word": "LISTO",
+                "type": "COMMON"
+            },
+            {
+                "word": "PARADA",
+                "type": "COMMON"
+            },
+            {
+                "word": "PUEDE",
+                "type": "COMMON"
+            }
+        ],
+        "hard": [
+            {
+                "word": "OBRA",
+                "type": "NOUN"
+            },
+            {
+                "word": "TEATRO",
+                "type": "NOUN"
+            },
+            {
+                "word": "POEMA",
+                "type": "NOUN"
+            },
+            {
+                "word": "ESCENA",
+                "type": "NOUN"
+            },
+            {
+                "word": "MAESTRO",
+                "type": "NOUN"
+            },
+            {
+                "word": "PAPEL",
+                "type": "NOUN"
+            },
+            {
+                "word": "SACERDOTE",
+                "type": "NOUN"
+            },
+            {
+                "word": "CREPE",
+                "type": "NOUN"
+            },
+            {
+                "word": "MASA",
+                "type": "NOUN"
+            },
+            {
+                "word": "PASTEL",
+                "type": "NOUN"
+            },
+            {
+                "word": "FARO",
+                "type": "NOUN"
+            },
+            {
+                "word": "YATE",
+                "type": "NOUN"
+            },
+            {
+                "word": "CEBRA",
+                "type": "NOUN"
+            },
+            {
+                "word": "BÚSQUEDA",
+                "type": "NOUN"
+            },
+            {
+                "word": "HAYA",
+                "type": "NOUN"
+            },
+            {
+                "word": "BÓVEDA",
+                "type": "NOUN"
+            },
+            {
+                "word": "CADENA",
+                "type": "NOUN"
+            },
+            {
+                "word": "PIEZA",
+                "type": "NOUN"
+            },
+            {
+                "word": "CREMA",
+                "type": "NOUN"
+            },
+            {
+                "word": "TRONCO",
+                "type": "NOUN"
+            },
+            {
+                "word": "NACER",
+                "type": "VERB"
+            },
+            {
+                "word": "CRECER",
+                "type": "VERB"
+            },
+            {
+                "word": "AGRADAR",
+                "type": "VERB"
+            },
+            {
+                "word": "ARRASTRAR",
+                "type": "VERB"
+            },
+            {
+                "word": "CURAR",
+                "type": "VERB"
+            },
+            {
+                "word": "MEZCLAR",
+                "type": "VERB"
+            },
+            {
+                "word": "ORACIÓN",
+                "type": "VERB"
+            },
+            {
+                "word": "PROBAR",
+                "type": "VERB"
+            },
+            {
+                "word": "ASAR",
+                "type": "VERB"
+            },
+            {
+                "word": "CELEBRAR",
+                "type": "VERB"
+            },
+            {
+                "word": "SUPREMO",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "EXTREMO",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "SINCERO",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "SEVERO",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "INQUIETO",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "FRESCO",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "EXTRAÑO",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "ESPECIAL",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "ENTERO",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "PRECISO",
+                "type": "ADJECTIVE"
+            },
+            {
+                "word": "BASTANTE",
+                "type": "COMMON"
+            },
+            {
+                "word": "PESAR",
+                "type": "COMMON"
+            },
+            {
+                "word": "CERCA",
+                "type": "COMMON"
+            },
+            {
+                "word": "AQUÍ",
+                "type": "COMMON"
+            },
+            {
+                "word": "ALLÍ",
+                "type": "COMMON"
+            },
+            {
+                "word": "EXCEPTO",
+                "type": "COMMON"
+            },
+            {
+                "word": "ADEMÁS",
+                "type": "COMMON"
+            },
+            {
+                "word": "ENTRE",
+                "type": "COMMON"
+            },
+            {
+                "word": "SEGÚN",
+                "type": "COMMON"
+            },
+            {
+                "word": "GRACIAS",
+                "type": "COMMON"
+            }
+        ]
+    }
+}

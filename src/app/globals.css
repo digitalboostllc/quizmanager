@@ -2,20 +2,433 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@font-face {
+  font-family: 'Rooftop';
+  src: url('/fonts/Rooftop-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
 }
 
-@media (prefers-color-scheme: dark) {
+@font-face {
+  font-family: 'Rooftop';
+  src: url('/fonts/Rooftop-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --font-rooftop-regular: var(--font-rooftop-regular);
+    --font-rooftop-bold: var(--font-rooftop-bold);
+    --font-geist: var(--font-geist);
+
+    /* Premium journal-inspired colors */
+    --background: 40 30% 96%;
+    --foreground: 30 20% 15%;
+
+    --card: 40 25% 98%;
+    --card-foreground: 30 20% 15%;
+
+    --popover: 40 25% 98%;
+    --popover-foreground: 30 20% 15%;
+
+    --primary: 30 20% 15%;
+    --primary-foreground: 40 30% 98%;
+
+    --secondary: 40 15% 90%;
+    --secondary-foreground: 30 20% 15%;
+
+    --muted: 40 15% 90%;
+    --muted-foreground: 30 10% 45%;
+
+    --accent: 30 15% 25%;
+    --accent-foreground: 40 30% 98%;
+
+    --destructive: 0 75% 50%;
+    --destructive-foreground: 40 30% 98%;
+
+    --border: 40 15% 85%;
+    --input: 40 15% 90%;
+    --ring: 30 20% 15%;
+
+    --radius: 0.5rem;
   }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Rooftop', system-ui, sans-serif;
+    font-size: 1.125rem;
+    line-height: 1.75;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: 'Rooftop', system-ui, sans-serif;
+    font-weight: 700;
+    @apply tracking-tight text-foreground;
+  }
+
+  h1 {
+    @apply text-[3.5rem] font-bold leading-tight tracking-[-0.02em] mb-3;
+  }
+
+  h2 {
+    @apply text-[2.25rem] font-bold leading-tight tracking-[-0.01em] mb-3;
+  }
+
+  h3 {
+    @apply text-[1.875rem] font-bold leading-snug mb-2;
+  }
+
+  h4 {
+    @apply text-[1.5rem] font-bold leading-snug mb-2;
+  }
+
+  .card-title {
+    font-family: 'Rooftop', system-ui, sans-serif;
+    font-weight: 400;
+    @apply text-xl font-semibold text-foreground mb-1;
+  }
+
+  .nav-link {
+    @apply text-lg text-muted-foreground hover:text-foreground transition-colors;
+  }
+
+  /* Add tighter spacing for subtitles */
+  h1+p {
+    @apply mt-0;
+  }
+}
+
+/* Custom Typography */
+@layer base {
+  h1 {
+    font-family: 'Rooftop', system-ui, sans-serif;
+    font-weight: 700;
+    @apply text-[3.5rem] font-bold leading-tight tracking-[-0.02em];
+  }
+
+  h2 {
+    font-family: 'Rooftop', system-ui, sans-serif;
+    font-weight: 700;
+    @apply text-[2.25rem] font-bold leading-tight tracking-[-0.01em];
+  }
+
+  h3 {
+    font-family: 'Rooftop', system-ui, sans-serif;
+    font-weight: 700;
+    @apply text-[1.875rem] font-bold leading-snug;
+  }
+
+  h4 {
+    font-family: 'Rooftop', system-ui, sans-serif;
+    font-weight: 700;
+    @apply text-[1.5rem] font-bold leading-snug;
+  }
+
+  body {
+    font-family: 'Rooftop', system-ui, sans-serif;
+    font-weight: 400;
+    @apply text-[1.125rem] leading-relaxed;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .text-lg {
+    @apply text-[1.25rem] leading-relaxed;
+  }
+
+  .text-xl {
+    @apply text-[1.5rem] leading-relaxed;
+  }
+
+  .text-2xl {
+    @apply text-[2rem] leading-snug;
+  }
+
+  .text-3xl {
+    @apply text-[2.5rem] leading-snug;
+  }
+}
+
+/* Dictionary Table Styling */
+.word-type {
+  @apply px-2 py-1 rounded-md text-xs font-medium;
+}
+
+.type-NOUN {
+  @apply bg-blue-100 text-blue-800 border-blue-200;
+}
+
+.type-VERB {
+  @apply bg-green-100 text-green-800 border-green-200;
+}
+
+.type-ADJECTIVE {
+  @apply bg-purple-100 text-purple-800 border-purple-200;
+}
+
+.type-COMMON {
+  @apply bg-amber-100 text-amber-800 border-amber-200;
+}
+
+.difficulty-badge {
+  @apply px-2 py-1 rounded-md text-xs font-medium;
+}
+
+.difficulty-easy {
+  @apply bg-emerald-100 text-emerald-800 border-emerald-200;
+}
+
+.difficulty-medium {
+  @apply bg-amber-100 text-amber-800 border-amber-200;
+}
+
+.difficulty-hard {
+  @apply bg-rose-100 text-rose-800 border-rose-200;
+}
+
+/* Dictionary table hover effects */
+.dictionary-table tr:hover {
+  @apply bg-accent/5 transition-colors;
+}
+
+.dictionary-table th {
+  @apply px-4 py-3 text-left font-medium text-muted-foreground;
+}
+
+.dictionary-table td {
+  @apply px-4 py-2 border-b border-border/50;
+}
+
+.dictionary-table tbody tr:last-child td {
+  @apply border-b-0;
+}
+
+/* Status dot styles */
+.status-dot-pending {
+  @apply bg-blue-500;
+}
+
+.status-dot-processing {
+  @apply bg-yellow-500;
+}
+
+.status-dot-published {
+  @apply bg-green-500;
+}
+
+.status-dot-failed {
+  @apply bg-red-500;
+}
+
+.status-dot-cancelled {
+  @apply bg-gray-500;
+}
+
+/* Status-based event styling */
+.fc .status-pending {
+  @apply border-l-2 border-l-blue-500;
+}
+
+.fc .status-processing {
+  @apply border-l-2 border-l-yellow-500;
+}
+
+.fc .status-published {
+  @apply border-l-2 border-l-green-500;
+}
+
+.fc .status-failed {
+  @apply border-l-2 border-l-red-500;
+}
+
+.fc .status-cancelled {
+  @apply border-l-2 border-l-gray-500;
+}
+
+/* Card enhancements */
+.premium-card {
+  @apply bg-card border-border rounded-lg shadow-sm transition-all duration-200;
+  @apply hover:shadow-md hover:border-primary/20;
+}
+
+/* Paper texture effect */
+.paper-texture {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23noise)' opacity='0.075'/%3E%3C/svg%3E");
+}
+
+/* Premium card effects */
+.card {
+  @apply transition-all duration-200;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.card:hover {
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* Premium list view enhancements */
+.list-row {
+  @apply p-4 transition-colors duration-200;
+  @apply hover:bg-secondary/30;
+  @apply border-b border-border last:border-b-0;
+}
+
+/* Premium buttons */
+.btn-premium {
+  @apply bg-primary text-primary-foreground shadow-sm;
+  @apply hover:bg-primary/90;
+  @apply active:scale-[0.98] transition-all duration-200;
+}
+
+/* Premium inputs */
+.input-premium {
+  @apply bg-background border-input shadow-sm;
+  @apply focus:ring-2 focus:ring-ring focus:ring-offset-1 focus:ring-offset-background;
+  @apply placeholder:text-muted-foreground/60;
+}
+
+/* Table header (day names) */
+.fc .fc-col-header {
+  @apply border-b border-border;
+}
+
+.fc .fc-col-header-cell {
+  @apply font-medium text-foreground;
+  background-color: hsl(var(--card));
+}
+
+.fc .fc-col-header-cell-cushion {
+  @apply px-2 py-3;
+  color: hsl(var(--foreground));
+}
+
+/* Month view specific */
+.fc .fc-daygrid-day.fc-day-other {
+  @apply bg-muted/30;
+}
+
+.fc .fc-daygrid-day-frame {
+  @apply p-1;
+}
+
+/* Week/day view specific */
+.fc .fc-timegrid-axis {
+  @apply text-xs font-medium text-muted-foreground bg-card border-border;
+}
+
+.fc .fc-timegrid-slot-label {
+  @apply text-xs font-medium text-muted-foreground bg-card border-border;
+}
+
+.fc .fc-timegrid-now-indicator-line {
+  border-color: hsl(var(--destructive));
+  border-width: 2px;
+}
+
+.fc .fc-timegrid-now-indicator-arrow {
+  border-color: hsl(var(--destructive));
+  border-width: 5px 5px 0 0;
+}
+
+/* List view specific */
+.fc .fc-list-table {
+  @apply border-collapse;
+}
+
+.fc .fc-list-day-side-text,
+.fc .fc-list-day-text {
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+
+/* Direct overrides for specific elements */
+.fc-header-toolbar button.fc-button.fc-button-primary {
+  background-color: hsl(var(--primary)) !important;
+  border-color: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+}
+
+.fc-toolbar-chunk .fc-today-button {
+  background-color: hsl(var(--primary)) !important;
+  border-color: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+}
+
+/* Hover states */
+.fc-button:hover {
+  background-color: hsl(var(--primary) / 0.9) !important;
+  border-color: hsl(var(--primary) / 0.9) !important;
+}
+
+/* Active states */
+.fc-button-active {
+  background-color: hsl(var(--primary) / 0.8) !important;
+  border-color: hsl(var(--primary) / 0.8) !important;
+}
+
+/* Day Header cells */
+.fc-col-header-cell-cushion {
+  color: hsl(var(--foreground)) !important;
+}
+
+/* Day number cells */
+.fc-daygrid-day-number {
+  color: hsl(var(--foreground)) !important;
+}
+
+/* Today highlight */
+.fc-day-today {
+  background-color: hsl(var(--primary) / 0.05) !important;
+}
+
+/* Calendar container specific styling */
+.calendar-container .fc-header-toolbar button.fc-button.fc-button-primary {
+  background-color: hsl(var(--primary)) !important;
+  border-color: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+}
+
+.calendar-container .fc-daygrid-day-frame {
+  background-color: transparent !important;
+}
+
+.calendar-container .fc-scrollgrid {
+  border-color: hsl(var(--border)) !important;
+}
+
+.calendar-container .fc-theme-standard td,
+.calendar-container .fc-theme-standard th {
+  border-color: hsl(var(--border)) !important;
+}
+
+/* Make sure active buttons use the right color */
+.calendar-container .fc-button-active,
+.calendar-container .fc-button-group .fc-button-active {
+  background-color: hsl(var(--primary) / 0.8) !important;
+  border-color: hsl(var(--primary) / 0.8) !important;
+  color: hsl(var(--primary-foreground)) !important;
+}
+
+/* Override any blue colors that might be hardcoded */
+.calendar-container button:focus,
+.calendar-container .fc-button:focus,
+.calendar-container .fc-button-primary:focus {
+  box-shadow: 0 0 0 0.2rem rgba(var(--primary), 0.25) !important;
+  outline: none !important;
 }

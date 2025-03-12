@@ -1,0 +1,16 @@
+{
+  "title": "Prêt pour deviner le mot mystère ?",
+  "answer": "CHIEN",
+  "solution": "Un animal domestique très fidèle",
+  "templateId": "cm7q9g4c30001i3pnr4g5ic1q",
+  "language": "fr",
+  "variables": {
+    "title": "Prêt pour deviner le mot mystère ?",
+    "subtitle": "Trouvez le mot de 5 lettres",
+    "wrongHint": "La lettre n'est pas dans le mot",
+    "correctHint": "La lettre est bien placée",
+    "misplacedHint": "La lettre est dans le mot mais mal placée",
+    "brandingText": "Jouez tous les jours pour améliorer votre vocabulaire !",
+    "wordGrid": "<div class=\"word-grid-container\"><div class=\"word-grid-row\"><div class=\"letter-box\">C</div><div class=\"letter-box\">H</div><div class=\"letter-box\">A</div><div class=\"letter-box\">T</div><div class=\"letter-box\">S</div></div><div class=\"word-grid-row\"><div class=\"letter-box\">C</div><div class=\"letter-box\">H</div><div class=\"letter-box\">I</div><div class=\"letter-box\">E</div><div class=\"letter-box\">N</div></div></div>"
+  }
+}

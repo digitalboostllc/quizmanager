@@ -1,0 +1,83 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["clientExtensions"]
+  engineType      = "binary"
+  output          = "./generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Template {
+  id          String   @id @default(cuid())
+  name        String
+  html        String
+  css         String?
+  variables   Json
+  quizType    QuizType
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  quizzes     Quiz[]
+  imageUrl    String?
+  description String?
+}
+
+model Quiz {
+  id            String         @id @default(cuid())
+  title         String
+  answer        String
+  solution      String? // Optional field to explain how to solve the quiz
+  variables     Json? // Contains all quiz data including hints, template variables, and other quiz-specific content
+  templateId    String
+  imageUrl      String?
+  status        QuizStatus     @default(DRAFT)
+  language      String         @default("en")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  template      Template       @relation(fields: [templateId], references: [id])
+  scheduledPost ScheduledPost?
+}
+
+model ScheduledPost {
+  id           String     @id @default(cuid())
+  quizId       String     @unique
+  quiz         Quiz       @relation(fields: [quizId], references: [id])
+  scheduledAt  DateTime
+  publishedAt  DateTime?
+  status       PostStatus @default(PENDING)
+  fbPostId     String? // Facebook post ID after publishing
+  caption      String? // Optional Facebook post caption
+  errorMessage String? // Store error message if publishing fails
+  retryCount   Int        @default(0)
+  lastRetryAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([scheduledAt])
+  @@index([status])
+}
+
+enum QuizStatus {
+  DRAFT
+  READY // Quiz is ready to be scheduled
+  SCHEDULED // Quiz has been scheduled
+  PUBLISHED // Quiz has been published
+  FAILED // Publishing failed
+}
+
+enum PostStatus {
+  PENDING // Waiting to be published
+  PROCESSING // Currently being published
+  PUBLISHED // Successfully published
+  FAILED // Failed to publish
+  CANCELLED // Cancelled by user
+}
+
+enum QuizType {
+  WORDLE
+  NUMBER_SEQUENCE
+  RHYME_TIME
+  CONCEPT_CONNECTION
+}
