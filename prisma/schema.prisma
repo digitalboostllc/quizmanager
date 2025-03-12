@@ -1,7 +1,7 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   previewFeatures = ["clientExtensions"]
-  engineType = "binary"
+  engineType      = "binary"
 }
 
 datasource db {
@@ -18,69 +18,69 @@ model Template {
   quizType    QuizType
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  quizzes     Quiz[]
   imageUrl    String?
   description String?
+  quizzes     Quiz[]
 }
 
 model Quiz {
-  id           String         @id @default(cuid())
-  title        String
-  answer       String
-  solution     String?        // Optional field to explain how to solve the quiz
-  variables    Json?          // Contains all quiz data including hints, template variables, and other quiz-specific content
-  templateId   String
-  userId       String?        // User who created the quiz
-  user         User?          @relation("UserQuizzes", fields: [userId], references: [id], onDelete: SetNull)
-  imageUrl     String?
-  status       QuizStatus     @default(DRAFT)
-  language     String         @default("en")
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  template     Template       @relation(fields: [templateId], references: [id])
+  id            String          @id @default(cuid())
+  title         String
+  answer        String
+  solution      String?
+  variables     Json?
+  templateId    String
+  imageUrl      String?
+  status        QuizStatus      @default(DRAFT)
+  language      String          @default("en")
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  userId        String?
+  template      Template        @relation(fields: [templateId], references: [id])
+  user          User?           @relation("UserQuizzes", fields: [userId], references: [id])
   scheduledPost ScheduledPost[]
-  
+
   @@index([userId])
 }
 
 model ScheduledPost {
-  id            String         @id @default(cuid())
-  quizId        String
-  quiz          Quiz           @relation(fields: [quizId], references: [id])
-  scheduledAt   DateTime
-  publishedAt   DateTime?
-  status        PostStatus     @default(PENDING)
-  fbPostId      String?        // Facebook post ID after publishing
-  caption       String?        // Optional Facebook post caption
-  errorMessage  String?        // Store error message if publishing fails
-  retryCount    Int           @default(0)
-  lastRetryAt   DateTime?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id           String     @id @default(cuid())
+  quizId       String
+  scheduledAt  DateTime
+  publishedAt  DateTime?
+  status       PostStatus @default(PENDING)
+  fbPostId     String?
+  caption      String?
+  errorMessage String?
+  retryCount   Int        @default(0)
+  lastRetryAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  quiz         Quiz       @relation(fields: [quizId], references: [id])
 
+  @@unique([quizId, scheduledAt])
   @@index([scheduledAt])
   @@index([status])
   @@index([quizId])
-  @@unique([quizId, scheduledAt])  // Prevent double-booking the same quiz at the same time
 }
 
 model AutoScheduleSlot {
-  id          String   @id @default(cuid())
-  dayOfWeek   Int      // 0-6 (Sunday-Saturday)
-  timeOfDay   String   // HH:mm format in UTC
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  dayOfWeek Int
+  timeOfDay String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([dayOfWeek, timeOfDay])
   @@index([dayOfWeek, timeOfDay])
 }
 
 model Settings {
-  id                    String   @id @default("default")
-  autoScheduleEnabled   Boolean  @default(true)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  id                  String   @id @default("default")
+  autoScheduleEnabled Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }
 
 model FacebookSettings {
@@ -98,18 +98,18 @@ model FacebookSettings {
 }
 
 model User {
-  id              String    @id @default(cuid())
-  name            String?
-  email           String    @unique
-  emailVerified   DateTime?
-  image           String?
-  password        String?   // Hashed password
-  role            UserRole  @default(USER)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  sessions        Session[]
-  quizzes         Quiz[]    @relation("UserQuizzes")
-  wordUsage       WordUsage[]
+  id            String      @id @default(cuid())
+  name          String?
+  email         String      @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          UserRole    @default(USER)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  quizzes       Quiz[]      @relation("UserQuizzes")
+  sessions      Session[]
+  wordUsage     WordUsage[]
 }
 
 model Session {
@@ -117,9 +117,9 @@ model Session {
   sessionToken String   @unique
   userId       String
   expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt    DateTime @default(now())
-  
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
 }
 
@@ -129,19 +129,19 @@ model VerificationToken {
   token      String   @unique
   expires    DateTime
   createdAt  DateTime @default(now())
-  
+
   @@unique([identifier, token])
 }
 
 model WordUsage {
-  id         String   @id @default(cuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  word       String
-  language   String
-  isUsed     Boolean  @default(true)
-  usedAt     DateTime @default(now())
-  
+  id       String   @id @default(cuid())
+  userId   String
+  word     String
+  language String
+  isUsed   Boolean  @default(true)
+  usedAt   DateTime @default(now())
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([userId, word, language])
   @@index([userId])
   @@index([word])
@@ -149,18 +149,18 @@ model WordUsage {
 
 enum QuizStatus {
   DRAFT
-  READY        // Quiz is ready to be scheduled
-  SCHEDULED    // Quiz has been scheduled
-  PUBLISHED    // Quiz has been published
-  FAILED       // Publishing failed
+  SCHEDULED
+  PUBLISHED
+  FAILED
+  READY
 }
 
 enum PostStatus {
-  PENDING      // Waiting to be published
-  PROCESSING   // Currently being published
-  PUBLISHED    // Successfully published
-  FAILED       // Failed to publish
-  CANCELLED    // Cancelled by user
+  PENDING
+  PROCESSING
+  PUBLISHED
+  FAILED
+  CANCELLED
 }
 
 enum QuizType {
