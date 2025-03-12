@@ -28,11 +28,6 @@ export function AuthErrorHandler() {
     const pathname = usePathname();
     const searchParams = useSearchParams();
 
-    // Skip all auth checks if DISABLE_AUTH is true
-    if (DISABLE_AUTH) {
-        return null;
-    }
-
     // Fix for authenticated users being redirected to login
     useEffect(() => {
         // Skip all checks if auth is disabled
@@ -187,10 +182,8 @@ export function AuthErrorHandler() {
 
     // Handle session expiry by redirecting to login
     const handleExpiredSession = useCallback(() => {
-        if (DISABLE_AUTH) {
-            // Skip auth check and redirect if auth is disabled
-            return;
-        }
+        // Skip auth check and redirect if auth is disabled
+        if (DISABLE_AUTH) return;
 
         if (redirectInProgressRef.current) return;
 
@@ -206,6 +199,11 @@ export function AuthErrorHandler() {
             sessionStorage.removeItem('auth_redirect_in_progress');
         }, 1000);
     }, [pathname, router]);
+
+    // Skip all auth checks if DISABLE_AUTH is true
+    if (DISABLE_AUTH) {
+        return null;
+    }
 
     // Provide visual feedback if we're fixing auth issues
     if (hasAttemptedRefresh && status === 'loading') {

@@ -25,32 +25,34 @@ export function FacebookSettingsLayout({ children, title, description }: Faceboo
     const router = useRouter();
     const pathname = usePathname() || '';
 
-    // Skip authentication check if auth is disabled
-    if (!DISABLE_AUTH) {
-        // Redirect to login if not authenticated
-        useEffect(() => {
-            if (!isLoading && !isAuthenticated) {
-                router.push('/auth/login');
-            }
-        }, [isLoading, isAuthenticated, router]);
+    // Redirect to login if not authenticated - moved outside conditional
+    useEffect(() => {
+        // Skip authentication check if auth is disabled
+        if (DISABLE_AUTH) return;
 
-        if (isLoading) {
-            return (
-                <div className="container flex items-center justify-center min-h-[80vh]">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-            );
+        if (!isLoading && !isAuthenticated) {
+            router.push('/auth/login');
         }
-
-        if (!isAuthenticated) {
-            return null; // Will redirect via useEffect
-        }
-    }
+    }, [isLoading, isAuthenticated, router]);
 
     // For debugging: log the current pathname whenever it changes
     useEffect(() => {
         console.log('Facebook Settings - Current pathname:', pathname);
     }, [pathname]);
+
+    // Loading state
+    if (!DISABLE_AUTH && isLoading) {
+        return (
+            <div className="container flex items-center justify-center min-h-[80vh]">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        );
+    }
+
+    // Will redirect via useEffect
+    if (!DISABLE_AUTH && !isAuthenticated) {
+        return null;
+    }
 
     // A simpler path check for Facebook settings pages
     const navItems = [
