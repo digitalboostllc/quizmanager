@@ -25,28 +25,26 @@ export function ProfileLayout({ children, title, description }: ProfileLayoutPro
     const router = useRouter();
     const pathname = usePathname();
 
-    // Redirect to login if not authenticated - moved outside conditional
-    useEffect(() => {
-        // Skip authentication check if auth is disabled
-        if (DISABLE_AUTH) return;
+    // Skip authentication check if auth is disabled
+    if (!DISABLE_AUTH) {
+        // Redirect to login if not authenticated
+        useEffect(() => {
+            if (!isLoading && !isAuthenticated) {
+                router.push('/auth/login');
+            }
+        }, [isLoading, isAuthenticated, router]);
 
-        if (!isLoading && !isAuthenticated) {
-            router.push('/auth/login');
+        if (isLoading) {
+            return (
+                <div className="container flex items-center justify-center min-h-[80vh]">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+            );
         }
-    }, [isLoading, isAuthenticated, router]);
 
-    // Loading state
-    if (!DISABLE_AUTH && isLoading) {
-        return (
-            <div className="container flex items-center justify-center min-h-[80vh]">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-        );
-    }
-
-    // Will redirect via useEffect
-    if (!DISABLE_AUTH && !isAuthenticated) {
-        return null;
+        if (!isAuthenticated) {
+            return null; // Will redirect via useEffect
+        }
     }
 
     const navItems = [
