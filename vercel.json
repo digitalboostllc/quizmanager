@@ -4,5 +4,16 @@
       "path": "/api/cron/publish-posts",
       "schedule": "* * * * *"
     }
-  ]
-} 
+  ],
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "build": {
+    "env": {
+      "NPM_FLAGS": "--legacy-peer-deps"
+    }
+  }
+}
