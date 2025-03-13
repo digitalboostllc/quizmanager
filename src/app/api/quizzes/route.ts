@@ -3,6 +3,11 @@ import { ApiError } from '@/services/api/errors/ApiError';
 import { Prisma, QuizStatus, QuizType } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 
+// Cache implementation
+// This is a simple in-memory cache. In production, you might want to use Redis or similar
+const CACHE_TTL = 60 * 1000; // 1 minute in ms
+const cache: Record<string, { data: any; timestamp: number }> = {};
+
 interface CreateQuizRequest {
   title: string;
   description?: string;
@@ -13,13 +18,39 @@ interface CreateQuizRequest {
   solution?: string;
 }
 
+// Helper to build a cache key from request parameters
+function buildCacheKey(request: NextRequest): string {
+  const url = new URL(request.url);
+  const params = new URLSearchParams(url.search);
+  return `quizzes_${params.toString()}`;
+}
+
+// Helper to check if cache entry is still valid
+function isCacheValid(key: string): boolean {
+  if (!cache[key]) return false;
+  const now = Date.now();
+  return now - cache[key].timestamp < CACHE_TTL;
+}
+
 export async function GET(request: NextRequest) {
+  // Set response headers for caching
+  const headers = {
+    'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
+  };
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
     const search = searchParams.get('search') || '';
     const type = searchParams.get('type') as QuizType | null;
+
+    // Check cache first
+    const cacheKey = buildCacheKey(request);
+    if (isCacheValid(cacheKey)) {
+      console.log(`Cache hit for ${cacheKey}`);
+      return NextResponse.json(cache[cacheKey].data, { headers });
+    }
 
     // Optimize the where condition to use indexes effectively
     const where: Prisma.QuizWhereInput = {
@@ -30,8 +61,8 @@ export async function GET(request: NextRequest) {
     };
 
     // Add timeout and retry logic with longer timeouts
-    const MAX_RETRIES = 3;
-    const TIMEOUT = 15000; // Increase to 15 seconds
+    const MAX_RETRIES = 2;
+    const TIMEOUT = 20000; // 20 seconds timeout
     const SELECT_FIELDS = {
       id: true,
       title: true,
@@ -57,7 +88,7 @@ export async function GET(request: NextRequest) {
           setTimeout(() => reject(new Error('Database operation timed out')), TIMEOUT);
         });
 
-        // Split the operations to optimize each one separately
+        // Try more efficient approach - first get just the quizzes
         const quizzesPromise = prisma.quiz.findMany({
           where,
           skip: (page - 1) * limit,
@@ -66,23 +97,67 @@ export async function GET(request: NextRequest) {
           select: SELECT_FIELDS,
         });
 
-        const countPromise = prisma.quiz.count({ where });
-
-        // Use Promise.all instead of Promise.race to ensure both operations complete
-        const [quizzes, total] = await Promise.race([
-          Promise.all([quizzesPromise, countPromise]),
+        const quizzes = await Promise.race([
+          quizzesPromise,
           timeoutPromise.then(() => { throw new Error('Database operation timed out'); })
-        ]) as [any, number];
+        ]);
 
-        return NextResponse.json({
+        // Then get an approximate count (faster than exact count)
+        let totalPages = 1;
+        let total = 0;
+
+        try {
+          // Only do a count query if it's the first page (most important for UX)
+          if (page === 1) {
+            // Use a faster count estimation for large tables 
+            const countResult = await prisma.$queryRaw<[{ count: BigInt }]>`
+              SELECT reltuples::bigint AS count
+              FROM pg_class
+              WHERE relname = 'Quiz';
+            `;
+
+            // If the estimate is available, use it
+            if (countResult && countResult[0] && countResult[0].count) {
+              total = Number(countResult[0].count);
+              totalPages = Math.ceil(total / limit);
+            } else {
+              // Fallback to counting via a where query but limit to 1000
+              const countQuery = await prisma.quiz.findMany({
+                where,
+                take: 1000,
+                select: { id: true }
+              });
+              total = countQuery.length;
+              totalPages = Math.ceil(total / limit) || 1;
+            }
+          } else {
+            // For non-first pages, if we got results, there's at least one more page
+            total = (page * limit) + (quizzes.length === limit ? limit : 0);
+            totalPages = Math.ceil(total / limit) || 1;
+          }
+        } catch (countError) {
+          console.warn('Count query failed, using estimate:', countError);
+          total = quizzes.length + ((page - 1) * limit);
+          totalPages = page + (quizzes.length === limit ? 1 : 0);
+        }
+
+        const response = {
           data: quizzes,
           pagination: {
             page,
             limit,
             total,
-            totalPages: Math.ceil(total / limit),
+            totalPages,
           },
-        });
+        };
+
+        // Store in cache
+        cache[cacheKey] = {
+          data: response,
+          timestamp: Date.now()
+        };
+
+        return NextResponse.json(response, { headers });
       } catch (error) {
         lastError = error;
         retryCount++;
@@ -97,18 +172,32 @@ export async function GET(request: NextRequest) {
               skip: (page - 1) * limit,
               take: limit,
               orderBy: { createdAt: 'desc' },
-              select: SELECT_FIELDS,
+              select: {
+                id: true,
+                title: true,
+                status: true,
+                createdAt: true,
+                updatedAt: true,
+              },
             });
 
-            return NextResponse.json({
+            const response = {
               data: simpleQuery,
               pagination: {
                 page,
                 limit,
-                total: simpleQuery.length + ((page - 1) * limit), // Estimate
-                totalPages: Math.ceil((simpleQuery.length + ((page - 1) * limit)) / limit),
+                total: simpleQuery.length + ((page - 1) * limit),
+                totalPages: page + (simpleQuery.length === limit ? 1 : 0),
               },
-            });
+            };
+
+            // Still cache this fallback result
+            cache[cacheKey] = {
+              data: response,
+              timestamp: Date.now()
+            };
+
+            return NextResponse.json(response, { headers });
           } catch (fallbackError) {
             console.error('Fallback query failed:', fallbackError);
             throw new ApiError(
@@ -131,7 +220,7 @@ export async function GET(request: NextRequest) {
     if (error instanceof ApiError) {
       return NextResponse.json(
         { error: error.message, code: error.code },
-        { status: error.statusCode }
+        { status: error.statusCode, headers }
       );
     }
 
@@ -139,20 +228,20 @@ export async function GET(request: NextRequest) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       return NextResponse.json(
         { error: 'Database operation failed', code: error.code },
-        { status: 503 }
+        { status: 503, headers }
       );
     }
 
     if (error instanceof Prisma.PrismaClientInitializationError) {
       return NextResponse.json(
         { error: 'Database connection failed', code: 'DATABASE_CONNECTION_ERROR' },
-        { status: 503 }
+        { status: 503, headers }
       );
     }
 
     return NextResponse.json(
       { error: 'Internal server error', code: 'INTERNAL_SERVER_ERROR' },
-      { status: 500 }
+      { status: 500, headers }
     );
   }
 }
