@@ -166,6 +166,9 @@ model WordUsage {
   @@index([userId])
   @@index([word])
   @@index([language, isUsed])
+  @@index([userId, language, isUsed])
+  @@index([userId, language, usedAt])
+  @@index([usedAt])
 }
 
 enum QuizStatus {

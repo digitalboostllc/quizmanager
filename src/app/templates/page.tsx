@@ -39,44 +39,185 @@ import { useAuth } from "@/hooks/useAuth";
 import { fetchApi } from "@/lib/api";
 import { QUIZ_TYPE_LABELS } from "@/lib/quiz-types";
 import { useStore } from "@/lib/store";
-import type { Template } from "@/lib/types";
-import { ArrowRight, Clock, Eye, Filter, MoreVertical, Pencil, Plus, Search, Sparkles, Trash2 } from "lucide-react";
+import type { PaginatedResponse, Template } from "@/lib/types";
+import { ArrowRight, Clock, Eye, Filter, Loader2, MoreVertical, Pencil, Plus, Search, Sparkles, Trash2 } from "lucide-react";
 import Image from 'next/image';
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+
+// Number of templates to fetch per page
+const TEMPLATES_PER_PAGE = 12;
+
+// Maximum number of retries for API calls
+const MAX_API_RETRIES = 3;
 
 export default function TemplatesPage() {
-  const { templates, deleteTemplate, setTemplates } = useStore();
+  const { deleteTemplate } = useStore();
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"name" | "type" | "recent">("recent");
   const { simulateLoading } = useLoadingDelay();
-  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    async function loadTemplates() {
-      setIsLoading(true);
+  // Pagination and loading states
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+
+  // API fetch function with retry logic
+  const fetchTemplatesWithRetry = useCallback(async (endpoint: string, reset: boolean = false): Promise<PaginatedResponse<Template> | null> => {
+    let attempts = 0;
+
+    while (attempts < MAX_API_RETRIES) {
       try {
-        console.log('Templates: Starting to load, will apply loading delay');
-        const data = await simulateLoading(fetchApi<Template[]>("/templates"));
-        console.log('Templates: Loading completed');
-        setTemplates(data);
+        // Use the loading delay only for initial loads (reset=true)
+        const fetcher = reset
+          ? () => simulateLoading(fetchApi<PaginatedResponse<Template>>(endpoint))
+          : () => fetchApi<PaginatedResponse<Template>>(endpoint);
+
+        return await fetcher();
       } catch (error) {
-        console.error('Templates: Loading failed', error);
-        toast({
-          title: "Error",
-          description: "Failed to load templates",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
+        attempts++;
+        console.error(`Templates API call failed (attempt ${attempts}/${MAX_API_RETRIES})`, error);
+
+        if (attempts >= MAX_API_RETRIES) {
+          throw error;
+        }
+
+        // Exponential backoff with jitter
+        const delay = Math.min(500 * Math.pow(1.5, attempts) * (0.9 + Math.random() * 0.2), 5000);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
 
-    loadTemplates();
-  }, [setTemplates, toast, simulateLoading]);
+    return null;
+  }, [simulateLoading]);
+
+  // Load templates with optimized parameters
+  const loadTemplates = useCallback(async (reset = false) => {
+    // Prevent duplicate requests
+    if ((reset && isLoading) || (!reset && (isLoadingMore || !hasMore))) {
+      return;
+    }
+
+    // Set appropriate loading state
+    if (reset) {
+      setIsLoading(true);
+      setTemplates([]);
+      setNextCursor(null);
+    } else {
+      setIsLoadingMore(true);
+    }
+
+    setError(null);
+
+    try {
+      // Build query parameters with type safety
+      const params = new URLSearchParams();
+      params.append('limit', TEMPLATES_PER_PAGE.toString());
+
+      if (nextCursor && !reset) {
+        params.append('cursor', nextCursor);
+      }
+
+      if (searchQuery.trim()) {
+        params.append('search', searchQuery.trim());
+      }
+
+      if (selectedType !== 'all') {
+        params.append('type', selectedType);
+      }
+
+      const endpoint = `/templates?${params.toString()}`;
+      console.log(`Templates: Loading from ${endpoint}`);
+
+      const response = await fetchTemplatesWithRetry(endpoint, reset);
+
+      if (!response) {
+        throw new Error("Failed to fetch templates after multiple retries");
+      }
+
+      if (response.data) {
+        // Update templates, ensuring we don't duplicate entries
+        setTemplates(prev => {
+          if (reset) return response.data;
+
+          // Create a Set of existing IDs for efficient lookup
+          const existingIds = new Set(prev.map(t => t.id));
+          // Filter out any duplicate templates that might be returned
+          const newTemplates = response.data.filter(t => !existingIds.has(t.id));
+
+          return [...prev, ...newTemplates];
+        });
+
+        // Update pagination state
+        setHasMore(response.pagination.hasMore);
+        setNextCursor(response.pagination.nextCursor);
+        setRetryCount(0); // Reset retry count on success
+      } else {
+        console.error('Unexpected response format', response);
+        setError('Received unexpected data format from server');
+      }
+    } catch (error: any) {
+      console.error('Templates: Loading failed', error);
+      setError(`Failed to load templates: ${error.message || 'Unknown error'}`);
+
+      // Show toast only on initial load failures, not silent load more failures
+      if (reset) {
+        toast({
+          title: "Error",
+          description: "Failed to load templates. Please try again.",
+          variant: "destructive",
+        });
+      }
+
+      // Keep track of retries for the entire page
+      setRetryCount(prev => prev + 1);
+
+      // Allow for auto-retry if we haven't exceeded the page-level retry limit
+      if (retryCount < 2) {
+        const delay = 1000 * (retryCount + 1);
+        console.log(`Will auto-retry in ${delay}ms`);
+        setTimeout(() => loadTemplates(reset), delay);
+      }
+    } finally {
+      setIsLoading(false);
+      setIsLoadingMore(false);
+    }
+  }, [
+    isLoading,
+    isLoadingMore,
+    hasMore,
+    nextCursor,
+    searchQuery,
+    selectedType,
+    fetchTemplatesWithRetry,
+    toast,
+    retryCount
+  ]);
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadTemplates(true);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery, selectedType, loadTemplates]);
+
+  // Initial load
+  useEffect(() => {
+    loadTemplates(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleLoadMore = () => {
+    loadTemplates(false);
+  };
 
   const handleDelete = async (id: string) => {
     if (!isAuthenticated) return;
@@ -85,12 +226,15 @@ export default function TemplatesPage() {
       await fetchApi(`/templates/${id}`, {
         method: "DELETE",
       });
+      // Update local state
+      setTemplates(prev => prev.filter(template => template.id !== id));
+      // Update global state
       deleteTemplate(id);
       toast({
         title: "Success",
         description: "Template deleted successfully",
       });
-    } catch {
+    } catch (error) {
       toast({
         title: "Error",
         description: "Failed to delete template",
@@ -99,25 +243,20 @@ export default function TemplatesPage() {
     }
   };
 
-  const filteredTemplates = templates
-    .filter((template) => {
-      const matchesSearch = template.name.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesType = selectedType === "all" || template.quizType === selectedType;
-      return matchesSearch && matchesType;
-    })
-    .sort((a, b) => {
-      if (sortBy === "name") {
-        return a.name.localeCompare(b.name);
-      } else if (sortBy === "type") {
-        return a.quizType.localeCompare(b.quizType);
-      } else {
-        // Sort by most recent
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      }
-    });
+  // Apply client-side sorting
+  const sortedTemplates = [...templates].sort((a, b) => {
+    if (sortBy === "name") {
+      return a.name.localeCompare(b.name);
+    } else if (sortBy === "type") {
+      return a.quizType.localeCompare(b.quizType);
+    } else {
+      // Sort by most recent
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    }
+  });
 
   // Limit the display for non-authenticated users
-  const displayTemplates = isAuthenticated ? filteredTemplates : filteredTemplates.slice(0, 4);
+  const displayTemplates = isAuthenticated ? sortedTemplates : sortedTemplates.slice(0, 4);
 
   // Template Card Skeleton component for loading state
   const TemplateCardSkeleton = () => (
@@ -141,6 +280,82 @@ export default function TemplatesPage() {
     </Card>
   );
 
+  // Render the load more button
+  const renderLoadMoreButton = () => {
+    if (!hasMore) return null;
+
+    return (
+      <div className="flex justify-center mt-8">
+        <Button
+          variant="outline"
+          onClick={handleLoadMore}
+          disabled={isLoadingMore}
+          className="min-w-[180px]"
+        >
+          {isLoadingMore ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Loading...
+            </>
+          ) : (
+            <>
+              Load More Templates
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </>
+          )}
+        </Button>
+      </div>
+    );
+  };
+
+  // When there's an error but we have some templates, show inline error
+  const renderError = () => {
+    if (!error) return null;
+
+    // Only show full error alert if we have no templates at all
+    if (templates.length === 0) {
+      return (
+        <Alert variant="destructive" className="mb-6">
+          <AlertDescription>
+            {error}
+            {retryCount >= 2 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-4"
+                onClick={() => loadTemplates(true)}
+              >
+                Try Again
+              </Button>
+            )}
+          </AlertDescription>
+        </Alert>
+      );
+    }
+
+    // If we have templates but load more failed, show inline message
+    return (
+      <div className="text-center mt-6 text-sm text-muted-foreground">
+        <p className="mb-2">{error}</p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => loadTemplates(false)}
+          disabled={isLoadingMore}
+        >
+          {isLoadingMore ? (
+            <>
+              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+              Retrying...
+            </>
+          ) : (
+            "Try Again"
+          )}
+        </Button>
+      </div>
+    );
+  };
+
   return (
     <div className="container py-8 space-y-8">
       <div className="space-y-1">
@@ -161,196 +376,225 @@ export default function TemplatesPage() {
                 <Plus className="mr-2 h-4 w-4" /> Create Template
               </Link>
             </Button>
-          ) : (
-            <Button asChild>
-              <Link href="/auth/login?callbackUrl=/templates">
-                <ArrowRight className="mr-2 h-4 w-4" /> Login to Create Templates
-              </Link>
-            </Button>
-          )}
+          ) : null}
         </div>
       </div>
 
-      {!isAuthenticated && (
-        <Alert className="bg-primary/5 border-primary/20">
-          <AlertDescription>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>Login to create your own templates and access all available templates.</div>
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/auth/login?callbackUrl=/templates">Login</Link>
-              </Button>
-            </div>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {/* Search and filter bar */}
-      <div className="flex flex-col md:flex-row gap-4">
-        <div className="relative flex-grow">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+      {/* Filter and search bar */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+        <div className="relative md:col-span-6">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            type="search"
             placeholder="Search templates..."
-            className="pl-9"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
           />
         </div>
-        <Select value={selectedType} onValueChange={setSelectedType}>
-          <SelectTrigger className="w-[200px]">
-            <div className="flex items-center">
-              <Filter className="mr-2 h-4 w-4" />
-              <span>Filter by Type</span>
-            </div>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            {Object.keys(QUIZ_TYPE_LABELS).map((type) => (
-              <SelectItem key={type} value={type}>
-                {QUIZ_TYPE_LABELS[type as keyof typeof QUIZ_TYPE_LABELS]}
+        <div className="flex md:col-span-6 gap-2">
+          <div className="relative flex-1">
+            <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Select value={selectedType} onValueChange={setSelectedType}>
+              <SelectTrigger className="pl-9">
+                <span className="truncate">
+                  {selectedType === "all" ? "All Types" : QUIZ_TYPE_LABELS[selectedType as QuizType] || selectedType}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                {Object.entries(QUIZ_TYPE_LABELS).map(([type, label]) => (
+                  <SelectItem key={type} value={type}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Select value={sortBy} onValueChange={(value) => setSortBy(value as any)}>
+            <SelectTrigger className="w-[160px]">
+              <span className="flex items-center">
+                <Clock className="mr-2 h-4 w-4" />
+                <span className="truncate">
+                  {sortBy === "name" ? "Sort by Name" :
+                    sortBy === "type" ? "Sort by Type" :
+                      "Sort by Recent"}
+                </span>
+              </span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="recent">
+                Most Recent
               </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={sortBy} onValueChange={(value) => setSortBy(value as any)}>
-          <SelectTrigger className="w-[200px]">
-            <div className="flex items-center">
-              <Clock className="mr-2 h-4 w-4" />
-              <span>Sort By</span>
-            </div>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="recent">Most Recent</SelectItem>
-            <SelectItem value="name">Name</SelectItem>
-            <SelectItem value="type">Type</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Templates grid with loading state */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {isLoading ? (
-          // Skeleton loading state
-          Array(8).fill(0).map((_, index) => (
-            <TemplateCardSkeleton key={index} />
-          ))
-        ) : (
-          // Actual templates
-          displayTemplates.map((template) => (
-            <Card key={template.id} className="overflow-hidden group hover:shadow-md transition-shadow h-full flex flex-col">
-              <div className="aspect-square relative">
-                {template.imageUrl ? (
-                  <Image
-                    src={template.imageUrl}
-                    alt={template.name}
-                    className="object-contain"
-                    fill
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
-                  />
-                ) : (
-                  <div className="bg-muted flex items-center justify-center w-full h-full">
-                    <span className="text-muted-foreground">No preview available</span>
-                  </div>
-                )}
-              </div>
-              <CardContent className="p-4 flex-1">
-                <h3 className="font-semibold text-lg line-clamp-1 mb-1">{template.name}</h3>
-
-                <div className="flex items-center gap-2 mt-1">
-                  <Badge variant="outline">
-                    {QUIZ_TYPE_LABELS[template.quizType]}
-                  </Badge>
-
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(template.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-
-                <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
-                  {template.description || "No description provided"}
-                </p>
-              </CardContent>
-              <CardFooter className="px-4 py-3 border-t flex justify-between">
-                <Button variant="outline" size="sm" asChild>
-                  <Link href={`/templates/${template.id}`} className="flex items-center">
-                    <Eye className="mr-2 h-4 w-4" /> View
-                  </Link>
-                </Button>
-                {isAuthenticated && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem asChild>
-                        <Link href={`/quizzes/new?templateId=${template.id}`} className="flex items-center">
-                          <Plus className="mr-2 h-4 w-4" /> Create Quiz
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <Link href={`/templates/${template.id}`} className="flex items-center">
-                          <Pencil className="mr-2 h-4 w-4" /> Edit Template
-                        </Link>
-                      </DropdownMenuItem>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="flex items-center text-destructive">
-                            <Trash2 className="mr-2 h-4 w-4" /> Delete
-                          </DropdownMenuItem>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This action cannot be undone. This will permanently delete the template
-                              and all associated data.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDelete(template.id)}>
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-              </CardFooter>
-            </Card>
-          ))
-        )}
-      </div>
-
-      {!isLoading && !isAuthenticated && displayTemplates.length < filteredTemplates.length && (
-        <div className="flex justify-center">
-          <Button asChild>
-            <Link href="/auth/login?callbackUrl=/templates">
-              Login to View All {filteredTemplates.length} Templates
-            </Link>
-          </Button>
+              <SelectItem value="name">
+                By Name
+              </SelectItem>
+              <SelectItem value="type">
+                By Type
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-      )}
+      </div>
 
-      {!isLoading && displayTemplates.length === 0 && (
-        <Card className="p-8 text-center">
-          <h3 className="text-xl font-semibold mb-2">No templates found</h3>
-          <p className="text-muted-foreground mb-4">
+      {/* Error display */}
+      {renderError()}
+
+      {/* Templates grid */}
+      {isLoading && templates.length === 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {Array.from({ length: TEMPLATES_PER_PAGE }).map((_, index) => (
+            <TemplateCardSkeleton key={index} />
+          ))}
+        </div>
+      ) : templates.length === 0 && !isLoading ? (
+        <div className="text-center py-12">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-muted mb-4">
+            <Search className="h-6 w-6 text-muted-foreground" />
+          </div>
+          <h3 className="text-lg font-medium">No templates found</h3>
+          <p className="text-muted-foreground mt-1">
             {searchQuery || selectedType !== "all"
-              ? "Try adjusting your search or filters"
+              ? "Try adjusting your search or filter"
               : "Create your first template to get started"}
           </p>
           {isAuthenticated && (
-            <Button asChild>
+            <Button className="mt-4" asChild>
               <Link href="/templates/new">
                 <Plus className="mr-2 h-4 w-4" /> Create Template
               </Link>
             </Button>
           )}
-        </Card>
+        </div>
+      ) : (
+        <div className="space-y-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {displayTemplates.map((template) => (
+              <Card key={template.id} className="overflow-hidden h-full flex flex-col group">
+                <div className="aspect-square relative bg-muted">
+                  {template.imageUrl ? (
+                    <Image
+                      src={template.imageUrl}
+                      alt={template.name}
+                      fill
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                      className="object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-secondary/50">
+                      <div className="text-4xl font-semibold text-muted-foreground opacity-50">
+                        {template.name.substring(0, 2).toUpperCase()}
+                      </div>
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Link
+                      href={`/templates/${template.id}`}
+                      className="bg-white text-black font-medium py-2 px-4 rounded-full text-sm shadow hover:bg-gray-100 transition"
+                    >
+                      View Template
+                    </Link>
+                  </div>
+                </div>
+                <CardContent className="p-4 flex-1">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold truncate">{template.name}</h3>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge variant="secondary">
+                      {QUIZ_TYPE_LABELS[template.quizType] || template.quizType}
+                    </Badge>
+                    {template._count?.quizzes && template._count.quizzes > 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        {template._count.quizzes} {template._count.quizzes === 1 ? 'quiz' : 'quizzes'}
+                      </span>
+                    )}
+                  </div>
+                  {template.description && (
+                    <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
+                      {template.description}
+                    </p>
+                  )}
+                </CardContent>
+                <CardFooter className="px-4 py-3 border-t flex justify-between">
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/templates/${template.id}`}>
+                      <Eye className="mr-2 h-4 w-4" /> Preview
+                    </Link>
+                  </Button>
+                  {isAuthenticated && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem asChild>
+                          <Link href={`/templates/${template.id}/edit`}>
+                            <Pencil className="mr-2 h-4 w-4" /> Edit
+                          </Link>
+                        </DropdownMenuItem>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                              <Trash2 className="mr-2 h-4 w-4" /> Delete
+                            </DropdownMenuItem>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Template</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete this template?
+                                This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDelete(template.id)}
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </CardFooter>
+              </Card>
+            ))}
+          </div>
+
+          {/* Load more button */}
+          {renderLoadMoreButton()}
+
+          {/* Load more skeletons */}
+          {isLoadingMore && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mt-6">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <TemplateCardSkeleton key={`loadmore-${index}`} />
+              ))}
+            </div>
+          )}
+
+          {/* Auth CTA for non-auth users */}
+          {!isAuthenticated && templates.length > 0 && (
+            <div className="bg-muted/50 rounded-lg p-6 mt-8 text-center">
+              <h3 className="text-lg font-medium mb-2">
+                Sign in to see all templates
+              </h3>
+              <p className="text-muted-foreground mb-4">
+                Access the full template library and create your own quizzes.
+              </p>
+              <Button asChild>
+                <Link href="/api/auth/signin">
+                  Sign In
+                </Link>
+              </Button>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

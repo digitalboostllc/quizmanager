@@ -17,6 +17,16 @@ export const LANGUAGES = {
   nl: 'Dutch',
 } as const;
 
+// Pagination response interface for cursor-based pagination
+export interface PaginatedResponse<T> {
+  data: T[];
+  pagination: {
+    hasMore: boolean;
+    nextCursor: string | null;
+    limit: number;
+  };
+}
+
 export interface Quiz {
   id: string;
   title: string;
@@ -41,11 +51,15 @@ export interface Template {
   css: string | null;
   variables: Record<string, string | number | boolean | string[] | Record<string, unknown>>;
   quizType: QuizType;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Date | string;
+  updatedAt: Date | string;
   quizzes?: Quiz[];
   imageUrl?: string | null;
   description?: string | null;
+  // Count of related records returned by Prisma's include feature
+  _count?: {
+    quizzes?: number;
+  };
 }
 
 export type CreateQuizInput = {

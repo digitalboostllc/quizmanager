@@ -57,6 +57,55 @@ const safePaths = [
     '/faq',
 ];
 
+// Rate limiting configuration
+const RATE_LIMIT = {
+    windowMs: 60 * 1000, // 1 minute
+    max: 100, // Limit each IP to 100 requests per windowMs
+    message: 'Too many requests from this IP, please try again later.',
+};
+
+// In-memory store for rate limiting
+const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
+
+// Helper to check if a request should be rate limited
+function isRateLimited(ip: string): boolean {
+    const now = Date.now();
+    const record = rateLimitStore.get(ip);
+
+    if (!record) {
+        rateLimitStore.set(ip, {
+            count: 1,
+            resetTime: now + RATE_LIMIT.windowMs,
+        });
+        return false;
+    }
+
+    if (now > record.resetTime) {
+        rateLimitStore.set(ip, {
+            count: 1,
+            resetTime: now + RATE_LIMIT.windowMs,
+        });
+        return false;
+    }
+
+    if (record.count >= RATE_LIMIT.max) {
+        return true;
+    }
+
+    record.count++;
+    return false;
+}
+
+// Helper to get client IP
+function getClientIp(request: NextRequest): string {
+    const forwardedFor = request.headers.get('x-forwarded-for');
+    if (forwardedFor) {
+        return forwardedFor.split(',')[0].trim();
+    }
+    // Use the remote address from the request headers
+    return request.headers.get('x-real-ip') || 'unknown';
+}
+
 // Helper to detect redirect loops
 const detectRedirectLoop = (request: NextRequest): boolean => {
     // Check for a special query parameter that counts redirects
@@ -102,7 +151,40 @@ export async function middleware(request: NextRequest) {
         pathname.includes('.') ||
         safePaths.includes(pathname)
     ) {
-        return NextResponse.next();
+        // Only apply rate limiting to API routes
+        if (!pathname.startsWith('/api/')) {
+            return NextResponse.next();
+        }
+
+        const ip = getClientIp(request);
+
+        // Check rate limit
+        if (isRateLimited(ip)) {
+            return NextResponse.json(
+                {
+                    error: RATE_LIMIT.message,
+                    code: 'RATE_LIMIT_EXCEEDED',
+                },
+                {
+                    status: 429,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Retry-After': '60',
+                    },
+                }
+            );
+        }
+
+        // Add rate limit headers to response
+        const response = NextResponse.next();
+        const record = rateLimitStore.get(ip);
+        if (record) {
+            response.headers.set('X-RateLimit-Limit', RATE_LIMIT.max.toString());
+            response.headers.set('X-RateLimit-Remaining', (RATE_LIMIT.max - record.count).toString());
+            response.headers.set('X-RateLimit-Reset', record.resetTime.toString());
+        }
+
+        return response;
     }
 
     // Never check auth for specific routes to avoid loops
