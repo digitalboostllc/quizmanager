@@ -14,6 +14,23 @@ const nextConfig = {
     // your project has TypeScript errors.
     ignoreBuildErrors: true,
   },
+  experimental: {
+    serverComponentsExternalPackages: ['@prisma/client', 'prisma'],
+    serverActions: {
+      bodySizeLimit: '2mb',
+    },
+    // Enable server-side instrumentation
+    instrumentationHook: true,
+  },
+  // Configure longer timeouts for API routes
+  serverRuntimeConfig: {
+    api: {
+      bodyParser: {
+        sizeLimit: '2mb',
+      },
+      responseLimit: '8mb',
+    },
+  },
 }
 
 module.exports = nextConfig 
