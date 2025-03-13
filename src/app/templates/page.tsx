@@ -45,8 +45,11 @@ import Image from 'next/image';
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-// Number of templates to fetch per page
-const TEMPLATES_PER_PAGE = 12;
+// Increase initial load size for better UX
+const TEMPLATES_PER_PAGE = 20;
+
+// Increase debounce delay to reduce API calls
+const SEARCH_DEBOUNCE_DELAY = 800;
 
 // Maximum number of retries for API calls
 const MAX_API_RETRIES = 3;
@@ -69,7 +72,7 @@ export default function TemplatesPage() {
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
 
-  // API fetch function with retry logic
+  // Optimized templates fetch with retry logic
   const fetchTemplatesWithRetry = useCallback(async (endpoint: string, reset: boolean = false): Promise<PaginatedResponse<Template> | null> => {
     let attempts = 0;
 
@@ -98,7 +101,7 @@ export default function TemplatesPage() {
     return null;
   }, [simulateLoading]);
 
-  // Load templates with optimized parameters
+  // Optimized templates load with proper error handling
   const loadTemplates = useCallback(async (reset = false) => {
     // Prevent duplicate requests
     if ((reset && isLoading) || (!reset && (isLoadingMore || !hasMore))) {
@@ -133,7 +136,7 @@ export default function TemplatesPage() {
         params.append('type', selectedType);
       }
 
-      const endpoint = `/templates?${params.toString()}`;
+      const endpoint = `/api/templates?${params.toString()}`;
       console.log(`Templates: Loading from ${endpoint}`);
 
       const response = await fetchTemplatesWithRetry(endpoint, reset);
@@ -201,11 +204,11 @@ export default function TemplatesPage() {
     retryCount
   ]);
 
-  // Debounce search input
+  // Debounce search input with increased delay
   useEffect(() => {
     const timer = setTimeout(() => {
       loadTemplates(true);
-    }, 500);
+    }, SEARCH_DEBOUNCE_DELAY);
     return () => clearTimeout(timer);
   }, [searchQuery, selectedType, loadTemplates]);
 

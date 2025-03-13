@@ -1,14 +1,15 @@
+import { trackPerformance } from '@/lib/monitoring';
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/services/api/errors/ApiError";
 import { Prisma, QuizType } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-// Enhanced cache implementation with dynamic TTL based on query complexity
+// Enhanced cache implementation with longer TTL for better performance
 const CACHE_TTL = {
-  default: 5 * 60 * 1000, // 5 minutes for most queries
-  search: 10 * 60 * 1000,  // 10 minutes for search results (less frequently changing)
-  minimal: 60 * 1000      // 1 minute for frequently changing data
+  default: 30 * 60 * 1000,    // 30 minutes for most queries
+  search: 15 * 60 * 1000,     // 15 minutes for search results
+  minimal: 5 * 60 * 1000      // 5 minutes for frequently changing data
 };
 
 // Cache structure with typed data
@@ -150,25 +151,32 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
+  const startTime = Date.now();
+  const requestPath = new URL(request.url).pathname;
+  const method = request.method;
+
   // Set response headers for caching
   const headers = {
-    'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+    'Cache-Control': 'public, s-maxage=1800, stale-while-revalidate=3600', // 30 minutes, stale for 1 hour
   };
 
   try {
     // Parse query parameters
     const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get('limit') || '20');
+    const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50); // Cap at 50
     const quizType = searchParams.get('type') as QuizType | null;
-    const search = searchParams.get('search') || '';
+    const search = searchParams.get('search')?.trim() || '';
     const cursor = searchParams.get('cursor') || undefined;
 
     // Don't use cache for cursor-based pagination requests after the first page
+    let cacheHit = false;
     if (!cursor) {
       const cacheKey = buildCacheKey(request.url, searchParams);
       if (isCacheValid(cacheKey)) {
         console.log(`Cache hit for ${cacheKey}`);
-        return NextResponse.json(cache[cacheKey].data, { headers });
+        const cachedResponse = NextResponse.json(cache[cacheKey].data, { headers });
+        trackPerformance(cachedResponse, requestPath, method, startTime, true);
+        return cachedResponse;
       }
     }
 
@@ -182,7 +190,7 @@ export async function GET(request: Request) {
     if (search) {
       where.name = {
         contains: search,
-        mode: 'insensitive',
+        mode: 'insensitive'
       };
     }
 
@@ -195,11 +203,6 @@ export async function GET(request: Request) {
       description: true,
       createdAt: true,
       updatedAt: true,
-      // Exclude large fields like HTML and CSS
-      html: false,
-      css: false,
-      variables: false,
-      // Include count of quizzes using this template
       _count: {
         select: {
           quizzes: true,
@@ -210,20 +213,36 @@ export async function GET(request: Request) {
     // Set up cursor for pagination
     const cursorObj = cursor ? { id: cursor } : undefined;
 
+    // Fix the orderBy to use proper Prisma types
+    const orderBy: Prisma.TemplateOrderByWithRelationInput[] = quizType
+      ? [
+        { quizType: 'asc' as Prisma.SortOrder },
+        { createdAt: 'desc' as Prisma.SortOrder }
+      ]
+      : [{ createdAt: 'desc' as Prisma.SortOrder }];
+
     // Execute the query with connection retries
     const templates = await withConnectionRetry(async () => {
       return prisma.template.findMany({
         where,
         take: limit,
-        ...(cursorObj && { cursor: { id: cursor }, skip: 1 }), // Skip the cursor item
-        orderBy: { createdAt: 'desc' },
+        ...(cursorObj && { cursor: { id: cursor }, skip: 1 }),
+        orderBy,
         select: SELECT_FIELDS,
       });
     });
 
+    // Get total count for first page only
+    let total = undefined;
+    if (!cursor) {
+      total = await withConnectionRetry(() =>
+        prisma.template.count({ where })
+      );
+    }
+
     // Determine if there are more items
-    const lastItem = templates.length > 0 ? templates[templates.length - 1] : null;
-    const nextCursor = lastItem?.id;
+    const lastItem = templates[templates.length - 1];
+    const nextCursor = templates.length === limit ? lastItem?.id : undefined;
     const hasMore = templates.length === limit;
 
     // Format the response
@@ -233,6 +252,7 @@ export async function GET(request: Request) {
         hasMore,
         nextCursor,
         limit,
+        total
       },
     };
 
@@ -249,46 +269,36 @@ export async function GET(request: Request) {
       };
     }
 
-    return NextResponse.json(response, { headers });
+    const apiResponse = NextResponse.json(response, { headers });
+    trackPerformance(apiResponse, requestPath, method, startTime, cacheHit);
+    return apiResponse;
+
   } catch (error) {
     console.error("Error fetching templates:", error);
 
-    // Empty response as fallback
-    const emptyResponse = {
-      data: [],
-      pagination: { hasMore: false, nextCursor: null, limit: 20 }
-    };
-
-    // Enhanced error handling with more detailed error responses
     let statusCode = 500;
-    let errorMessage = 'Internal server error';
-    let errorCode = 'INTERNAL_SERVER_ERROR';
+    let errorMessage = "Failed to fetch templates";
+    let errorCode = "INTERNAL_SERVER_ERROR";
 
     if (error instanceof ApiError) {
       statusCode = error.statusCode;
       errorMessage = error.message;
       errorCode = error.code;
     } else if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      statusCode = 503;
-      errorMessage = 'Database operation failed';
+      statusCode = 400;
+      errorMessage = "Invalid query parameters";
       errorCode = error.code;
-    } else if (error instanceof Prisma.PrismaClientInitializationError) {
-      statusCode = 503;
-      errorMessage = 'Database connection failed';
-      errorCode = 'DATABASE_CONNECTION_ERROR';
     } else if (isConnectionError(error)) {
       statusCode = 503;
-      errorMessage = 'Database connection issues, please try again later';
-      errorCode = 'CONNECTION_ERROR';
+      errorMessage = "Database connection issues";
+      errorCode = "CONNECTION_ERROR";
     }
 
-    return NextResponse.json(
-      {
-        error: errorMessage,
-        code: errorCode,
-        ...emptyResponse
-      },
+    const errorResponse = NextResponse.json(
+      { error: errorMessage, code: errorCode },
       { status: statusCode, headers }
     );
+    trackPerformance(errorResponse, requestPath, method, startTime, false, errorMessage);
+    return errorResponse;
   }
 } 
