@@ -5,7 +5,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
 function createPrismaClient() {
-  // Connection pooling settings optimized for serverless
+  // Connection pooling settings optimized for Supabase Pro in a serverless environment
   const connectionOptions: Prisma.PrismaClientOptions = {
     log: process.env.NODE_ENV === 'development'
       ? ['query', 'error', 'warn'] as Prisma.LogLevel[]
@@ -15,8 +15,6 @@ function createPrismaClient() {
         url: process.env.POSTGRES_PRISMA_URL,
       },
     },
-    // Configure connection timeouts for Supabase
-    // Reference: https://www.prisma.io/docs/orm/prisma-client/deployment/connection-pooling
   };
 
   const client = new PrismaClient(connectionOptions);
@@ -25,10 +23,13 @@ function createPrismaClient() {
   async function warmupConnectionPool() {
     try {
       // Execute a simple query to warm up the connection
+      const startTime = Date.now();
       await client.$queryRaw`SELECT 1`;
-      console.log('Connection pool warmed up successfully');
+      const duration = Date.now() - startTime;
+      console.log(`Connection pool warmed up successfully in ${duration}ms`);
     } catch (e) {
       console.error('Failed to warm up connection pool:', e);
+      // No need to rethrow - we'll let normal queries establish connections if warmup fails
     }
   }
 
@@ -42,7 +43,10 @@ function createPrismaClient() {
     try {
       // Create a promise that will reject after a timeout
       const queryPromise = next(params);
-      const timeout = 6000; // Reduced timeout to 6 seconds to fail faster and retry sooner
+
+      // On Supabase Pro, we can use a longer timeout since we have more resources
+      // and better connection pooling capabilities
+      const timeout = process.env.NODE_ENV === 'production' ? 12000 : 8000; // 12 seconds in prod, 8 in dev
 
       // Set up a timeout for the query
       const timeoutPromise = new Promise((_, reject) => {
@@ -58,12 +62,15 @@ function createPrismaClient() {
       const after = Date.now();
       const duration = after - before;
 
-      if (duration > 1000) { // Lower threshold to 1 second for highlighting slow queries
+      // Lower logging threshold in production to catch more potential issues
+      const slowThreshold = process.env.NODE_ENV === 'production' ? 500 : 1000; // ms
+
+      if (duration > slowThreshold) {
         console.warn(`Slow query detected (${duration}ms):`, {
           model: params.model,
           action: params.action,
           duration,
-          args: JSON.stringify(params.args).substring(0, 200) + '...',
+          args: params.args ? JSON.stringify(params.args).substring(0, 200) + '...' : 'none',
         });
       }
 
@@ -71,13 +78,15 @@ function createPrismaClient() {
     } catch (e) {
       const after = Date.now();
       const error = e as Error;
+
       console.error(`Query failed after ${after - before}ms:`, {
         model: params.model,
         action: params.action,
         error: error.message,
         code: (error as any).code,
-        stack: error.stack
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined // Only include stack in dev
       });
+
       throw error;
     }
   });
@@ -88,12 +97,22 @@ function createPrismaClient() {
 // Preserve connection pool across hot reloads in development
 export const prisma = globalForPrisma.prisma || createPrismaClient();
 
-// Important: close the connection when the Node.js process ends
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
 }
 
-// Add connection cleanup for serverless environment
-process.on('beforeExit', async () => {
-  await prisma.$disconnect();
-}); 
+// More aggressive cleanup in serverless environments
+if (process.env.NODE_ENV === 'production') {
+  // Listen for serverless function completion
+  process.on('beforeExit', async () => {
+    await prisma.$disconnect();
+  });
+
+  // Handle shutdown signals
+  ['SIGINT', 'SIGTERM'].forEach(signal => {
+    process.on(signal, async () => {
+      await prisma.$disconnect();
+      process.exit(0);
+    });
+  });
+} 
