@@ -42,7 +42,7 @@ import { formatDate } from "@/lib/date";
 import { generateQuizImage } from '@/lib/quiz';
 import { useStore } from "@/lib/store";
 import type { Quiz, QuizStatus } from "@/lib/types";
-import { ArrowRight, Calendar, Eye, Filter, LayoutGrid, LayoutList, MoreVertical, Plus, Search, Sparkles, Trash2 } from "lucide-react";
+import { ArrowRight, Calendar, Eye, Filter, LayoutGrid, LayoutList, MoreVertical, Plus, RefreshCw, Search, Sparkles, Trash2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -50,10 +50,9 @@ import { useEffect, useState } from "react";
 interface PaginatedResponse {
   data: Quiz[];
   pagination: {
-    page: number;
+    hasMore: boolean;
+    nextCursor: string | null;
     limit: number;
-    total: number;
-    totalPages: number;
   };
 }
 
@@ -66,14 +65,40 @@ export default function QuizzesPage() {
   const [sortBy, setSortBy] = useState<"date" | "title" | "status">("date");
   const [view, setView] = useState<"grid" | "list">("grid");
   const [isLoading, setIsLoading] = useState(false);
-  const [totalPages, setTotalPages] = useState(1);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const { simulateLoading } = useLoadingDelay();
 
   // Define loadQuizzes function outside useEffect
-  const loadQuizzes = async () => {
+  const loadQuizzes = async (cursor?: string) => {
     try {
-      setIsLoading(true);
-      const response = await simulateLoading(fetchApi<PaginatedResponse>("/quizzes"));
+      // If we're loading more, set the appropriate loading state
+      const isLoadingMoreData = !!cursor;
+      if (isLoadingMoreData) {
+        setIsLoadingMore(true);
+      } else {
+        setIsLoading(true);
+      }
+
+      // Build query string with cursor if provided
+      const queryParams = new URLSearchParams();
+      queryParams.append('limit', '10');
+
+      if (cursor) {
+        queryParams.append('cursor', cursor);
+      }
+
+      if (searchQuery) {
+        queryParams.append('search', searchQuery);
+      }
+
+      if (statusFilter !== 'all') {
+        queryParams.append('type', statusFilter);
+      }
+
+      const endpoint = `/quizzes?${queryParams.toString()}`;
+      const response = await simulateLoading(fetchApi<PaginatedResponse>(endpoint));
       console.log('API Response:', response);
 
       if (response && response.data) {
@@ -83,8 +108,17 @@ export default function QuizzesPage() {
           imageUrl: quiz.imageUrl,
           status: quiz.status
         })));
-        setQuizzes(response.data);
-        setTotalPages(response.pagination.totalPages);
+
+        // If loading more, append to existing quizzes, otherwise replace
+        if (isLoadingMoreData) {
+          setQuizzes([...quizzes, ...response.data]);
+        } else {
+          setQuizzes(response.data);
+        }
+
+        // Update pagination state
+        setHasMore(response.pagination.hasMore);
+        setNextCursor(response.pagination.nextCursor);
       } else {
         console.error('Invalid response structure:', response);
         throw new Error('Invalid response structure');
@@ -98,6 +132,14 @@ export default function QuizzesPage() {
       });
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
+    }
+  };
+
+  // Load more function
+  const handleLoadMore = () => {
+    if (nextCursor && !isLoadingMore) {
+      loadQuizzes(nextCursor);
     }
   };
 
@@ -106,6 +148,13 @@ export default function QuizzesPage() {
       loadQuizzes();
     }
   }, [isAuthenticated]);
+
+  // Reload when search or filters change
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadQuizzes();
+    }
+  }, [searchQuery, statusFilter, sortBy]);
 
   const handleDelete = async (id: string) => {
     if (!isAuthenticated) return;
@@ -208,6 +257,32 @@ export default function QuizzesPage() {
         return status;
     }
   };
+
+  const renderLoadMoreButton = () => {
+    if (!hasMore) return null;
+
+    return (
+      <div className="flex justify-center mt-8">
+        <Button
+          variant="outline"
+          onClick={handleLoadMore}
+          disabled={isLoadingMore}
+          className="gap-2"
+        >
+          {isLoadingMore ? (
+            <>
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              Loading More...
+            </>
+          ) : (
+            <>
+              Load More Quizzes
+            </>
+          )}
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="container py-8 space-y-8">
@@ -485,6 +560,8 @@ export default function QuizzesPage() {
           <p className="text-muted-foreground">No quizzes found</p>
         </div>
       )}
+
+      {renderLoadMoreButton()}
     </div>
   );
 }

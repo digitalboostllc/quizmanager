@@ -40,29 +40,42 @@ export async function GET(request: NextRequest) {
 
   try {
     const searchParams = request.nextUrl.searchParams;
-    const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
     const search = searchParams.get('search') || '';
     const type = searchParams.get('type') as QuizType | null;
 
-    // Check cache first
-    const cacheKey = buildCacheKey(request);
-    if (isCacheValid(cacheKey)) {
-      console.log(`Cache hit for ${cacheKey}`);
-      return NextResponse.json(cache[cacheKey].data, { headers });
+    // New cursor-based pagination
+    const cursor = searchParams.get('cursor') || undefined;
+
+    // Check cache first (but not when using cursor, as each page is unique)
+    if (!cursor) {
+      const cacheKey = buildCacheKey(request);
+      if (isCacheValid(cacheKey)) {
+        console.log(`Cache hit for ${cacheKey}`);
+        return NextResponse.json(cache[cacheKey].data, { headers });
+      }
     }
 
     // Optimize the where condition to use indexes effectively
-    const where: Prisma.QuizWhereInput = {
-      ...(search && {
-        title: { contains: search, mode: 'insensitive' },
-      }),
-      ...(type && { quizType: type }),
-    };
+    const where: Prisma.QuizWhereInput = {};
+
+    // Only add conditions if they are provided
+    if (search) {
+      where.title = { contains: search, mode: 'insensitive' };
+    }
+
+    if (type) {
+      // For template type filtering (since Quiz doesn't have quizType directly)
+      where.template = {
+        quizType: type
+      };
+    }
 
     // Add timeout and retry logic with longer timeouts
     const MAX_RETRIES = 2;
-    const TIMEOUT = 20000; // 20 seconds timeout
+    const TIMEOUT = 10000; // Reduce timeout to 10 seconds
+
+    // Define minimal fields to select
     const SELECT_FIELDS = {
       id: true,
       title: true,
@@ -88,74 +101,47 @@ export async function GET(request: NextRequest) {
           setTimeout(() => reject(new Error('Database operation timed out')), TIMEOUT);
         });
 
-        // Try more efficient approach - first get just the quizzes
+        // Cursor-based pagination query
+        const cursorObj = cursor ? { id: cursor } : undefined;
+
+        // Simplified query - less data returned
         const quizzesPromise = prisma.quiz.findMany({
           where,
-          skip: (page - 1) * limit,
           take: limit,
+          ...(cursorObj && { cursor: cursorObj, skip: 1 }), // Skip the cursor item
           orderBy: { createdAt: 'desc' },
           select: SELECT_FIELDS,
         });
 
+        // Execute the query with timeout
         const quizzes = await Promise.race([
           quizzesPromise,
           timeoutPromise.then(() => { throw new Error('Database operation timed out'); })
         ]);
 
-        // Then get an approximate count (faster than exact count)
-        let totalPages = 1;
-        let total = 0;
-
-        try {
-          // Only do a count query if it's the first page (most important for UX)
-          if (page === 1) {
-            // Use a faster count estimation for large tables 
-            const countResult = await prisma.$queryRaw<[{ count: BigInt }]>`
-              SELECT reltuples::bigint AS count
-              FROM pg_class
-              WHERE relname = 'Quiz';
-            `;
-
-            // If the estimate is available, use it
-            if (countResult && countResult[0] && countResult[0].count) {
-              total = Number(countResult[0].count);
-              totalPages = Math.ceil(total / limit);
-            } else {
-              // Fallback to counting via a where query but limit to 1000
-              const countQuery = await prisma.quiz.findMany({
-                where,
-                take: 1000,
-                select: { id: true }
-              });
-              total = countQuery.length;
-              totalPages = Math.ceil(total / limit) || 1;
-            }
-          } else {
-            // For non-first pages, if we got results, there's at least one more page
-            total = (page * limit) + (quizzes.length === limit ? limit : 0);
-            totalPages = Math.ceil(total / limit) || 1;
-          }
-        } catch (countError) {
-          console.warn('Count query failed, using estimate:', countError);
-          total = quizzes.length + ((page - 1) * limit);
-          totalPages = page + (quizzes.length === limit ? 1 : 0);
-        }
+        // No need for count query with cursor-based pagination 
+        // Just determine if there are more items
+        const lastItem = quizzes.length > 0 ? quizzes[quizzes.length - 1] : null;
+        const nextCursor = lastItem?.id;
+        const hasMore = quizzes.length === limit;
 
         const response = {
           data: quizzes,
           pagination: {
-            page,
+            hasMore,
+            nextCursor,
             limit,
-            total,
-            totalPages,
           },
         };
 
-        // Store in cache
-        cache[cacheKey] = {
-          data: response,
-          timestamp: Date.now()
-        };
+        // Only cache first page results
+        if (!cursor) {
+          const cacheKey = buildCacheKey(request);
+          cache[cacheKey] = {
+            data: response,
+            timestamp: Date.now()
+          };
+        }
 
         return NextResponse.json(response, { headers });
       } catch (error) {
@@ -163,57 +149,26 @@ export async function GET(request: NextRequest) {
         retryCount++;
         console.warn(`Retry ${retryCount}/${MAX_RETRIES} for quizzes query:`, error);
 
-        // If it's the last retry, try a more minimal query as fallback
-        if (retryCount === MAX_RETRIES) {
-          try {
-            // Fallback to a simpler query without count
-            const simpleQuery = await prisma.quiz.findMany({
-              where,
-              skip: (page - 1) * limit,
-              take: limit,
-              orderBy: { createdAt: 'desc' },
-              select: {
-                id: true,
-                title: true,
-                status: true,
-                createdAt: true,
-                updatedAt: true,
-              },
-            });
-
-            const response = {
-              data: simpleQuery,
-              pagination: {
-                page,
-                limit,
-                total: simpleQuery.length + ((page - 1) * limit),
-                totalPages: page + (simpleQuery.length === limit ? 1 : 0),
-              },
-            };
-
-            // Still cache this fallback result
-            cache[cacheKey] = {
-              data: response,
-              timestamp: Date.now()
-            };
-
-            return NextResponse.json(response, { headers });
-          } catch (fallbackError) {
-            console.error('Fallback query failed:', fallbackError);
-            throw new ApiError(
-              'Database operation failed',
-              503,
-              'DATABASE_ERROR'
-            );
-          }
-        }
-
         // Wait before retrying (exponential backoff)
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+        if (retryCount < MAX_RETRIES) {
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+        }
       }
     }
 
-    throw lastError;
+    // If all retries failed, return a minimal fallback response
+    console.error('All retries failed for quizzes query:', lastError);
+    return NextResponse.json(
+      {
+        error: 'Database query failed after multiple attempts',
+        data: [],
+        pagination: { hasMore: false, nextCursor: null, limit }
+      },
+      {
+        status: 503,
+        headers
+      }
+    );
   } catch (error) {
     console.error('Error in GET /quizzes:', error);
 
