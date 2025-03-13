@@ -136,7 +136,7 @@ export default function TemplatesPage() {
         params.append('type', selectedType);
       }
 
-      const endpoint = `/api/templates?${params.toString()}`;
+      const endpoint = `templates?${params.toString()}`;
       console.log(`Templates: Loading from ${endpoint}`);
 
       const response = await fetchTemplatesWithRetry(endpoint, reset);
@@ -226,7 +226,7 @@ export default function TemplatesPage() {
     if (!isAuthenticated) return;
 
     try {
-      await fetchApi(`/templates/${id}`, {
+      await fetchApi(`templates/${id}`, {
         method: "DELETE",
       });
       // Update local state
