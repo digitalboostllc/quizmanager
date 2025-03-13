@@ -5,13 +5,13 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Cache implementation
 // This is a simple in-memory cache. In production, you might want to use Redis or similar
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes in ms - increased from 1 minute
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes in ms
 const cache: Record<string, { data: any; timestamp: number }> = {};
 
 // Connection pool management
 let connectionFailures = 0;
-const MAX_CONNECTION_FAILURES = 3;
-const CONNECTION_BACKOFF_BASE = 500; // ms
+const MAX_CONNECTION_FAILURES = 5;
+const CONNECTION_BACKOFF_BASE = 250; // ms - reduced for faster retries
 
 interface CreateQuizRequest {
   title: string;
@@ -38,11 +38,25 @@ function isCacheValid(key: string): boolean {
 }
 
 // Helper to manage connection failures with exponential backoff
-async function withConnectionRetry<T>(operation: () => Promise<T>, maxRetries = 3): Promise<T> {
+async function withConnectionRetry<T>(operation: () => Promise<T>, maxRetries = 5): Promise<T> {
   let retries = 0;
+
+  // Create a more simplified operation if possible
+  const simplifiedOperation = () => {
+    try {
+      // Add a comment to the operation to help with debugging
+      if (typeof operation === 'function') {
+        return operation();
+      }
+      return Promise.reject(new Error('Invalid operation provided to withConnectionRetry'));
+    } catch (err) {
+      return Promise.reject(err);
+    }
+  };
+
   while (true) {
     try {
-      return await operation();
+      return await simplifiedOperation();
     } catch (error: any) {
       retries++;
       // If we've hit max retries or this is not a connection error, rethrow
@@ -50,13 +64,13 @@ async function withConnectionRetry<T>(operation: () => Promise<T>, maxRetries = 
         throw error;
       }
 
-      // Increment global connection failure counter
-      connectionFailures++;
+      // Increment global connection failure counter (with a maximum to prevent overflow)
+      connectionFailures = Math.min(connectionFailures + 1, 10);
 
-      // Exponential backoff with jitter
+      // More aggressive exponential backoff with jitter
       const delay = Math.min(
-        CONNECTION_BACKOFF_BASE * Math.pow(2, Math.min(connectionFailures, 6)) * (0.5 + Math.random()),
-        10000
+        CONNECTION_BACKOFF_BASE * Math.pow(1.5, Math.min(connectionFailures, 6)) * (0.5 + Math.random()),
+        5000 // Cap maximum delay at 5 seconds
       );
 
       console.warn(`Connection failure, retrying in ${delay}ms (attempt ${retries}/${maxRetries})`, error.message);
@@ -81,6 +95,9 @@ function isConnectionError(error: any): boolean {
     /ETIMEDOUT/,
     /connection.*terminated/i,
     /too.*many.*connections/i,
+    /timed out/i,      // Added to catch our custom timeout errors
+    /could not acquire/i,
+    /query.*timeout/i, // Added to catch query timeout errors
   ];
 
   return connectionErrorPatterns.some(pattern => pattern.test(errorMsg));
@@ -110,7 +127,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Optimize the where condition to use indexes effectively
+    // Further optimize the where condition to be more specific
     const where: Prisma.QuizWhereInput = {};
 
     // Only add conditions if they are provided
@@ -125,19 +142,16 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // Define minimal fields to select - further reduced to only essential fields
+    // Define even more minimal fields to select
     const SELECT_FIELDS = {
       id: true,
       title: true,
       status: true,
-      imageUrl: true,
       createdAt: true,
-      updatedAt: true,
-      // Reduced template fields to minimum
+      // For the first page, we don't even need template details, just the id
       template: {
         select: {
           id: true,
-          name: true,
           quizType: true,
         },
       },
@@ -146,9 +160,9 @@ export async function GET(request: NextRequest) {
     // Cursor-based pagination query
     const cursorObj = cursor ? { id: cursor } : undefined;
 
-    // Use the connection retry mechanism for database queries
+    // Use the connection retry mechanism for database queries with more retries
     const quizzes = await withConnectionRetry(async () => {
-      // Simplified query with minimal data
+      // Super simplified query with minimal data
       return prisma.quiz.findMany({
         where,
         take: limit,
@@ -156,9 +170,9 @@ export async function GET(request: NextRequest) {
         orderBy: { createdAt: 'desc' },
         select: SELECT_FIELDS,
       });
-    }, 3); // 3 retries max
+    }, 5); // 5 retries max (increased from 3)
 
-    // Reset connection failure counter on success
+    // Reset connection failure counter on success (gradually)
     connectionFailures = Math.max(0, connectionFailures - 1);
 
     // No need for count query with cursor-based pagination 

@@ -42,7 +42,7 @@ function createPrismaClient() {
     try {
       // Create a promise that will reject after a timeout
       const queryPromise = next(params);
-      const timeout = 8000; // Reduced timeout to 8 seconds to fail faster
+      const timeout = 6000; // Reduced timeout to 6 seconds to fail faster and retry sooner
 
       // Set up a timeout for the query
       const timeoutPromise = new Promise((_, reject) => {
