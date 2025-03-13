@@ -1,8 +1,11 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 
+// PrismaClient is attached to the `global` object in development to prevent
+// exhausting your database connection limit.
+const globalForPrisma = global as unknown as { prisma: PrismaClient };
+
 function createPrismaClient() {
-  // Explicitly set connection options
-  // These are crucial for serverless environments
+  // Connection pooling settings optimized for serverless
   const connectionOptions: Prisma.PrismaClientOptions = {
     log: process.env.NODE_ENV === 'development'
       ? ['query', 'error', 'warn'] as Prisma.LogLevel[]
@@ -12,9 +15,25 @@ function createPrismaClient() {
         url: process.env.POSTGRES_PRISMA_URL,
       },
     },
+    // Configure connection timeouts for Supabase
+    // Reference: https://www.prisma.io/docs/orm/prisma-client/deployment/connection-pooling
   };
 
   const client = new PrismaClient(connectionOptions);
+
+  // Add connection pool warmup to ensure connections are ready
+  async function warmupConnectionPool() {
+    try {
+      // Execute a simple query to warm up the connection
+      await client.$queryRaw`SELECT 1`;
+      console.log('Connection pool warmed up successfully');
+    } catch (e) {
+      console.error('Failed to warm up connection pool:', e);
+    }
+  }
+
+  // Warm up the connection pool
+  warmupConnectionPool();
 
   // Add middleware for query timeout and logging
   client.$use(async (params, next) => {
@@ -23,7 +42,7 @@ function createPrismaClient() {
     try {
       // Create a promise that will reject after a timeout
       const queryPromise = next(params);
-      const timeout = 15000; // 15 seconds timeout for queries
+      const timeout = 8000; // Reduced timeout to 8 seconds to fail faster
 
       // Set up a timeout for the query
       const timeoutPromise = new Promise((_, reject) => {
@@ -39,7 +58,7 @@ function createPrismaClient() {
       const after = Date.now();
       const duration = after - before;
 
-      if (duration > 2000) {
+      if (duration > 1000) { // Lower threshold to 1 second for highlighting slow queries
         console.warn(`Slow query detected (${duration}ms):`, {
           model: params.model,
           action: params.action,
@@ -57,6 +76,7 @@ function createPrismaClient() {
         action: params.action,
         error: error.message,
         code: (error as any).code,
+        stack: error.stack
       });
       throw error;
     }
@@ -65,12 +85,15 @@ function createPrismaClient() {
   return client;
 }
 
-// PrismaClient is attached to the `global` object in development to prevent
-// exhausting your database connection limit.
-// In serverless environments, a new instance is created for each function call
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
-
-// Use a singleton pattern to manage connections
+// Preserve connection pool across hot reloads in development
 export const prisma = globalForPrisma.prisma || createPrismaClient();
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma; 
+// Important: close the connection when the Node.js process ends
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma;
+}
+
+// Add connection cleanup for serverless environment
+process.on('beforeExit', async () => {
+  await prisma.$disconnect();
+}); 

@@ -5,8 +5,13 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Cache implementation
 // This is a simple in-memory cache. In production, you might want to use Redis or similar
-const CACHE_TTL = 60 * 1000; // 1 minute in ms
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes in ms - increased from 1 minute
 const cache: Record<string, { data: any; timestamp: number }> = {};
+
+// Connection pool management
+let connectionFailures = 0;
+const MAX_CONNECTION_FAILURES = 3;
+const CONNECTION_BACKOFF_BASE = 500; // ms
 
 interface CreateQuizRequest {
   title: string;
@@ -32,10 +37,59 @@ function isCacheValid(key: string): boolean {
   return now - cache[key].timestamp < CACHE_TTL;
 }
 
+// Helper to manage connection failures with exponential backoff
+async function withConnectionRetry<T>(operation: () => Promise<T>, maxRetries = 3): Promise<T> {
+  let retries = 0;
+  while (true) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      retries++;
+      // If we've hit max retries or this is not a connection error, rethrow
+      if (retries >= maxRetries || !isConnectionError(error)) {
+        throw error;
+      }
+
+      // Increment global connection failure counter
+      connectionFailures++;
+
+      // Exponential backoff with jitter
+      const delay = Math.min(
+        CONNECTION_BACKOFF_BASE * Math.pow(2, Math.min(connectionFailures, 6)) * (0.5 + Math.random()),
+        10000
+      );
+
+      console.warn(`Connection failure, retrying in ${delay}ms (attempt ${retries}/${maxRetries})`, error.message);
+
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+}
+
+// Helper to identify connection-related errors
+function isConnectionError(error: any): boolean {
+  if (!error) return false;
+
+  // Common connection error indicators from Prisma and pg
+  const errorMsg = error.message || '';
+  const connectionErrorPatterns = [
+    /connection.*pool/i,
+    /timeout.*connection/i,
+    /failed.*connect/i,
+    /ECONNREFUSED/,
+    /ETIMEDOUT/,
+    /connection.*terminated/i,
+    /too.*many.*connections/i,
+  ];
+
+  return connectionErrorPatterns.some(pattern => pattern.test(errorMsg));
+}
+
 export async function GET(request: NextRequest) {
   // Set response headers for caching
   const headers = {
-    'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
+    'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600', // Increased cache times
   };
 
   try {
@@ -71,11 +125,7 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // Add timeout and retry logic with longer timeouts
-    const MAX_RETRIES = 2;
-    const TIMEOUT = 10000; // Reduce timeout to 10 seconds
-
-    // Define minimal fields to select
+    // Define minimal fields to select - further reduced to only essential fields
     const SELECT_FIELDS = {
       id: true,
       title: true,
@@ -83,6 +133,7 @@ export async function GET(request: NextRequest) {
       imageUrl: true,
       createdAt: true,
       updatedAt: true,
+      // Reduced template fields to minimum
       template: {
         select: {
           id: true,
@@ -92,111 +143,89 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    let retryCount = 0;
-    let lastError: any;
+    // Cursor-based pagination query
+    const cursorObj = cursor ? { id: cursor } : undefined;
 
-    while (retryCount < MAX_RETRIES) {
-      try {
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Database operation timed out')), TIMEOUT);
-        });
+    // Use the connection retry mechanism for database queries
+    const quizzes = await withConnectionRetry(async () => {
+      // Simplified query with minimal data
+      return prisma.quiz.findMany({
+        where,
+        take: limit,
+        ...(cursorObj && { cursor: cursorObj, skip: 1 }), // Skip the cursor item
+        orderBy: { createdAt: 'desc' },
+        select: SELECT_FIELDS,
+      });
+    }, 3); // 3 retries max
 
-        // Cursor-based pagination query
-        const cursorObj = cursor ? { id: cursor } : undefined;
+    // Reset connection failure counter on success
+    connectionFailures = Math.max(0, connectionFailures - 1);
 
-        // Simplified query - less data returned
-        const quizzesPromise = prisma.quiz.findMany({
-          where,
-          take: limit,
-          ...(cursorObj && { cursor: cursorObj, skip: 1 }), // Skip the cursor item
-          orderBy: { createdAt: 'desc' },
-          select: SELECT_FIELDS,
-        });
+    // No need for count query with cursor-based pagination 
+    // Just determine if there are more items
+    const lastItem = quizzes.length > 0 ? quizzes[quizzes.length - 1] : null;
+    const nextCursor = lastItem?.id;
+    const hasMore = quizzes.length === limit;
 
-        // Execute the query with timeout
-        const quizzes = await Promise.race([
-          quizzesPromise,
-          timeoutPromise.then(() => { throw new Error('Database operation timed out'); })
-        ]);
+    const response = {
+      data: quizzes,
+      pagination: {
+        hasMore,
+        nextCursor,
+        limit,
+      },
+    };
 
-        // No need for count query with cursor-based pagination 
-        // Just determine if there are more items
-        const lastItem = quizzes.length > 0 ? quizzes[quizzes.length - 1] : null;
-        const nextCursor = lastItem?.id;
-        const hasMore = quizzes.length === limit;
-
-        const response = {
-          data: quizzes,
-          pagination: {
-            hasMore,
-            nextCursor,
-            limit,
-          },
-        };
-
-        // Only cache first page results
-        if (!cursor) {
-          const cacheKey = buildCacheKey(request);
-          cache[cacheKey] = {
-            data: response,
-            timestamp: Date.now()
-          };
-        }
-
-        return NextResponse.json(response, { headers });
-      } catch (error) {
-        lastError = error;
-        retryCount++;
-        console.warn(`Retry ${retryCount}/${MAX_RETRIES} for quizzes query:`, error);
-
-        // Wait before retrying (exponential backoff)
-        if (retryCount < MAX_RETRIES) {
-          await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
-        }
-      }
+    // Only cache first page results
+    if (!cursor) {
+      const cacheKey = buildCacheKey(request);
+      cache[cacheKey] = {
+        data: response,
+        timestamp: Date.now()
+      };
     }
 
-    // If all retries failed, return a minimal fallback response
-    console.error('All retries failed for quizzes query:', lastError);
-    return NextResponse.json(
-      {
-        error: 'Database query failed after multiple attempts',
-        data: [],
-        pagination: { hasMore: false, nextCursor: null, limit }
-      },
-      {
-        status: 503,
-        headers
-      }
-    );
+    return NextResponse.json(response, { headers });
   } catch (error) {
     console.error('Error in GET /quizzes:', error);
 
+    // Empty DB is fine, just return empty results
+    const noResults = {
+      data: [],
+      pagination: { hasMore: false, nextCursor: null, limit: 10 }
+    };
+
+    // For user-facing errors, try to give a helpful message
+    let statusCode = 500;
+    let errorMessage = 'Internal server error';
+    let errorCode = 'INTERNAL_SERVER_ERROR';
+
     if (error instanceof ApiError) {
-      return NextResponse.json(
-        { error: error.message, code: error.code },
-        { status: error.statusCode, headers }
-      );
+      statusCode = error.statusCode;
+      errorMessage = error.message;
+      errorCode = error.code;
+    } else if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      statusCode = 503;
+      errorMessage = 'Database operation failed';
+      errorCode = error.code;
+    } else if (error instanceof Prisma.PrismaClientInitializationError) {
+      statusCode = 503;
+      errorMessage = 'Database connection failed';
+      errorCode = 'DATABASE_CONNECTION_ERROR';
+    } else if (isConnectionError(error)) {
+      statusCode = 503;
+      errorMessage = 'Database connection issues, please try again later';
+      errorCode = 'CONNECTION_ERROR';
     }
 
-    // Handle specific Prisma errors
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      return NextResponse.json(
-        { error: 'Database operation failed', code: error.code },
-        { status: 503, headers }
-      );
-    }
-
-    if (error instanceof Prisma.PrismaClientInitializationError) {
-      return NextResponse.json(
-        { error: 'Database connection failed', code: 'DATABASE_CONNECTION_ERROR' },
-        { status: 503, headers }
-      );
-    }
-
+    // Return graceful error response
     return NextResponse.json(
-      { error: 'Internal server error', code: 'INTERNAL_SERVER_ERROR' },
-      { status: 500, headers }
+      {
+        error: errorMessage,
+        code: errorCode,
+        ...noResults  // Always include empty results so the UI can still render
+      },
+      { status: statusCode, headers }
     );
   }
 }
