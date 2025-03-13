@@ -3,10 +3,22 @@ import { ApiError } from '@/services/api/errors/ApiError';
 import { Prisma, QuizStatus, QuizType } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 
-// Cache implementation
-// This is a simple in-memory cache. In production, you might want to use Redis or similar
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes in ms
-const cache: Record<string, { data: any; timestamp: number }> = {};
+// Enhanced cache implementation with dynamic TTL based on query complexity
+const CACHE_TTL = {
+  default: 5 * 60 * 1000, // 5 minutes for most queries
+  search: 10 * 60 * 1000,  // 10 minutes for search results (less frequently changing)
+  minimal: 60 * 1000      // 1 minute for frequently changing data
+};
+
+// Cache structure with typed data
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+  ttl: number;
+}
+
+// Typed cache object
+const cache: Record<string, CacheEntry<any>> = {};
 
 // Connection pool management
 let connectionFailures = 0;
@@ -24,69 +36,66 @@ interface CreateQuizRequest {
 }
 
 // Helper to build a cache key from request parameters
-function buildCacheKey(request: NextRequest): string {
-  const url = new URL(request.url);
-  const params = new URLSearchParams(url.search);
-  return `quizzes_${params.toString()}`;
+function buildCacheKey(url: string, params: URLSearchParams): string {
+  // Create a deterministic order of params
+  const sortedParams = Array.from(params.entries())
+    .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+    .map(([key, value]) => `${key}=${value}`)
+    .join('&');
+
+  return `quizzes_${sortedParams || 'all'}`;
 }
 
 // Helper to check if cache entry is still valid
 function isCacheValid(key: string): boolean {
   if (!cache[key]) return false;
   const now = Date.now();
-  return now - cache[key].timestamp < CACHE_TTL;
+  return now - cache[key].timestamp < cache[key].ttl;
 }
 
 // Helper to manage connection failures with exponential backoff
-async function withConnectionRetry<T>(operation: () => Promise<T>, maxRetries = 5): Promise<T> {
+async function withConnectionRetry<T>(operation: () => Promise<T>, maxRetries = 3): Promise<T> {
   let retries = 0;
-
-  // Create a more simplified operation if possible
-  const simplifiedOperation = () => {
-    try {
-      // Add a comment to the operation to help with debugging
-      if (typeof operation === 'function') {
-        return operation();
-      }
-      return Promise.reject(new Error('Invalid operation provided to withConnectionRetry'));
-    } catch (err) {
-      return Promise.reject(err);
-    }
-  };
+  let lastError: any = null;
 
   while (true) {
     try {
-      return await simplifiedOperation();
+      return await operation();
     } catch (error: any) {
+      lastError = error;
       retries++;
-      // If we've hit max retries or this is not a connection error, rethrow
+
       if (retries >= maxRetries || !isConnectionError(error)) {
+        console.error(`Operation failed after ${retries} attempts:`, error);
         throw error;
       }
 
-      // Increment global connection failure counter (with a maximum to prevent overflow)
-      connectionFailures = Math.min(connectionFailures + 1, 10);
-
-      // More aggressive exponential backoff with jitter
+      // Exponential backoff with jitter
       const delay = Math.min(
-        CONNECTION_BACKOFF_BASE * Math.pow(1.5, Math.min(connectionFailures, 6)) * (0.5 + Math.random()),
-        5000 // Cap maximum delay at 5 seconds
+        250 * Math.pow(1.5, Math.min(retries, 6)) * (0.5 + Math.random()),
+        5000 // Cap at 5 seconds
       );
 
-      console.warn(`Connection failure, retrying in ${delay}ms (attempt ${retries}/${maxRetries})`, error.message);
+      console.warn(`Connection failure in quizzes API, retrying in ${delay}ms (attempt ${retries}/${maxRetries})`, error.message);
 
-      // Wait before retrying
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
 }
 
-// Helper to identify connection-related errors
+// Enhanced helper to identify connection-related errors
 function isConnectionError(error: any): boolean {
   if (!error) return false;
 
-  // Common connection error indicators from Prisma and pg
-  const errorMsg = error.message || '';
+  const errorMsg = (error.message || '').toLowerCase();
+
+  // Check if it's a Prisma connection error
+  if (error instanceof Prisma.PrismaClientInitializationError ||
+    error instanceof Prisma.PrismaClientRustPanicError) {
+    return true;
+  }
+
+  // Check common connection error patterns
   const connectionErrorPatterns = [
     /connection.*pool/i,
     /timeout.*connection/i,
@@ -95,9 +104,9 @@ function isConnectionError(error: any): boolean {
     /ETIMEDOUT/,
     /connection.*terminated/i,
     /too.*many.*connections/i,
-    /timed out/i,      // Added to catch our custom timeout errors
+    /timed out/i,
     /could not acquire/i,
-    /query.*timeout/i, // Added to catch query timeout errors
+    /query.*timeout/i,
   ];
 
   return connectionErrorPatterns.some(pattern => pattern.test(errorMsg));
@@ -106,63 +115,66 @@ function isConnectionError(error: any): boolean {
 export async function GET(request: NextRequest) {
   // Set response headers for caching
   const headers = {
-    'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600', // Increased cache times
+    'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
   };
 
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const limit = parseInt(searchParams.get('limit') || '10');
+    const { searchParams } = new URL(request.url);
+    const limit = parseInt(searchParams.get('limit') || '20');
     const search = searchParams.get('search') || '';
     const type = searchParams.get('type') as QuizType | null;
-
-    // New cursor-based pagination
     const cursor = searchParams.get('cursor') || undefined;
 
-    // Check cache first (but not when using cursor, as each page is unique)
+    // Don't use cache for cursor-based pagination requests after the first page
     if (!cursor) {
-      const cacheKey = buildCacheKey(request);
+      const cacheKey = buildCacheKey(request.url, searchParams);
       if (isCacheValid(cacheKey)) {
         console.log(`Cache hit for ${cacheKey}`);
         return NextResponse.json(cache[cacheKey].data, { headers });
       }
     }
 
-    // Further optimize the where condition to be more specific
+    // Build where conditions
     const where: Prisma.QuizWhereInput = {};
 
-    // Only add conditions if they are provided
     if (search) {
-      where.title = { contains: search, mode: 'insensitive' };
+      where.title = {
+        contains: search,
+        mode: 'insensitive',
+      };
     }
 
     if (type) {
-      // For template type filtering (since Quiz doesn't have quizType directly)
       where.template = {
         quizType: type
       };
     }
 
-    // Define even more minimal fields to select
+    // Optimize field selection (only select what's actually needed)
     const SELECT_FIELDS = {
       id: true,
       title: true,
       status: true,
       createdAt: true,
-      // For the first page, we don't even need template details, just the id
+      imageUrl: true,
       template: {
         select: {
           id: true,
           quizType: true,
         },
       },
+      _count: {
+        select: {
+          scheduledPost: true,
+        },
+      },
     };
 
-    // Cursor-based pagination query
+    // Set up cursor for pagination
     const cursorObj = cursor ? { id: cursor } : undefined;
 
-    // Use the connection retry mechanism for database queries with more retries
+    // Execute the query with connection retries
     const quizzes = await withConnectionRetry(async () => {
-      // Super simplified query with minimal data
       return prisma.quiz.findMany({
         where,
         take: limit,
@@ -170,17 +182,14 @@ export async function GET(request: NextRequest) {
         orderBy: { createdAt: 'desc' },
         select: SELECT_FIELDS,
       });
-    }, 5); // 5 retries max (increased from 3)
+    });
 
-    // Reset connection failure counter on success (gradually)
-    connectionFailures = Math.max(0, connectionFailures - 1);
-
-    // No need for count query with cursor-based pagination 
-    // Just determine if there are more items
+    // Determine if there are more items
     const lastItem = quizzes.length > 0 ? quizzes[quizzes.length - 1] : null;
     const nextCursor = lastItem?.id;
     const hasMore = quizzes.length === limit;
 
+    // Format the response
     const response = {
       data: quizzes,
       pagination: {
@@ -190,26 +199,30 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    // Only cache first page results
+    // Cache the results (only first page)
     if (!cursor) {
-      const cacheKey = buildCacheKey(request);
+      const cacheKey = buildCacheKey(request.url, searchParams);
+      // Use appropriate TTL based on query type
+      const ttl = search ? CACHE_TTL.search : CACHE_TTL.default;
+
       cache[cacheKey] = {
         data: response,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        ttl
       };
     }
 
     return NextResponse.json(response, { headers });
   } catch (error) {
-    console.error('Error in GET /quizzes:', error);
+    console.error("Error in GET /quizzes:", error);
 
-    // Empty DB is fine, just return empty results
-    const noResults = {
+    // Empty response as fallback
+    const emptyResponse = {
       data: [],
-      pagination: { hasMore: false, nextCursor: null, limit: 10 }
+      pagination: { hasMore: false, nextCursor: null, limit: 20 }
     };
 
-    // For user-facing errors, try to give a helpful message
+    // Enhanced error handling with more detailed error responses
     let statusCode = 500;
     let errorMessage = 'Internal server error';
     let errorCode = 'INTERNAL_SERVER_ERROR';
@@ -232,12 +245,11 @@ export async function GET(request: NextRequest) {
       errorCode = 'CONNECTION_ERROR';
     }
 
-    // Return graceful error response
     return NextResponse.json(
       {
         error: errorMessage,
         code: errorCode,
-        ...noResults  // Always include empty results so the UI can still render
+        ...emptyResponse
       },
       { status: statusCode, headers }
     );
