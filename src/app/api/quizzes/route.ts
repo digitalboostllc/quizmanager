@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || '';
     const type = searchParams.get('type') as QuizType | null;
 
+    // Optimize the where condition to use indexes effectively
     const where: Prisma.QuizWhereInput = {
       ...(search && {
         title: { contains: search, mode: 'insensitive' },
@@ -28,9 +29,24 @@ export async function GET(request: NextRequest) {
       ...(type && { quizType: type }),
     };
 
-    // Add timeout and retry logic
+    // Add timeout and retry logic with longer timeouts
     const MAX_RETRIES = 3;
-    const TIMEOUT = 5000; // 5 seconds
+    const TIMEOUT = 15000; // Increase to 15 seconds
+    const SELECT_FIELDS = {
+      id: true,
+      title: true,
+      status: true,
+      imageUrl: true,
+      createdAt: true,
+      updatedAt: true,
+      template: {
+        select: {
+          id: true,
+          name: true,
+          quizType: true,
+        },
+      },
+    };
 
     let retryCount = 0;
     let lastError: any;
@@ -41,26 +57,22 @@ export async function GET(request: NextRequest) {
           setTimeout(() => reject(new Error('Database operation timed out')), TIMEOUT);
         });
 
-        const dbOperation = Promise.all([
-          prisma.quiz.findMany({
-            where,
-            skip: (page - 1) * limit,
-            take: limit,
-            orderBy: { createdAt: 'desc' },
-            include: {
-              template: {
-                select: {
-                  id: true,
-                  name: true,
-                  quizType: true,
-                },
-              },
-            },
-          }),
-          prisma.quiz.count({ where }),
-        ]);
+        // Split the operations to optimize each one separately
+        const quizzesPromise = prisma.quiz.findMany({
+          where,
+          skip: (page - 1) * limit,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+          select: SELECT_FIELDS,
+        });
 
-        const [quizzes, total] = await Promise.race([timeoutPromise, dbOperation]) as [any, number];
+        const countPromise = prisma.quiz.count({ where });
+
+        // Use Promise.all instead of Promise.race to ensure both operations complete
+        const [quizzes, total] = await Promise.race([
+          Promise.all([quizzesPromise, countPromise]),
+          timeoutPromise.then(() => { throw new Error('Database operation timed out'); })
+        ]) as [any, number];
 
         return NextResponse.json({
           data: quizzes,
@@ -74,15 +86,37 @@ export async function GET(request: NextRequest) {
       } catch (error) {
         lastError = error;
         retryCount++;
+        console.warn(`Retry ${retryCount}/${MAX_RETRIES} for quizzes query:`, error);
 
-        // If it's the last retry, throw the error
+        // If it's the last retry, try a more minimal query as fallback
         if (retryCount === MAX_RETRIES) {
-          console.error('Database operation failed after max retries:', error);
-          throw new ApiError(
-            'Database operation failed',
-            503,
-            'DATABASE_ERROR'
-          );
+          try {
+            // Fallback to a simpler query without count
+            const simpleQuery = await prisma.quiz.findMany({
+              where,
+              skip: (page - 1) * limit,
+              take: limit,
+              orderBy: { createdAt: 'desc' },
+              select: SELECT_FIELDS,
+            });
+
+            return NextResponse.json({
+              data: simpleQuery,
+              pagination: {
+                page,
+                limit,
+                total: simpleQuery.length + ((page - 1) * limit), // Estimate
+                totalPages: Math.ceil((simpleQuery.length + ((page - 1) * limit)) / limit),
+              },
+            });
+          } catch (fallbackError) {
+            console.error('Fallback query failed:', fallbackError);
+            throw new ApiError(
+              'Database operation failed',
+              503,
+              'DATABASE_ERROR'
+            );
+          }
         }
 
         // Wait before retrying (exponential backoff)

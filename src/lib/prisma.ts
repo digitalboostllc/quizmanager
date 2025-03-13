@@ -10,22 +10,36 @@ function createPrismaClient() {
     },
   });
 
-  // Add middleware for query timeout
+  // Add middleware for query timeout and logging
   client.$use(async (params, next) => {
     const before = Date.now();
-    const result = await next(params);
-    const after = Date.now();
-    const duration = after - before;
 
-    if (duration > 5000) {
-      console.warn(`Slow query detected (${duration}ms):`, {
+    try {
+      const result = await next(params);
+      const after = Date.now();
+      const duration = after - before;
+
+      if (duration > 5000) {
+        console.warn(`Slow query detected (${duration}ms):`, {
+          model: params.model,
+          action: params.action,
+          duration,
+          args: JSON.stringify(params.args).substring(0, 200) + '...',
+        });
+      }
+
+      return result;
+    } catch (e) {
+      const after = Date.now();
+      const error = e as Error;
+      console.error(`Query failed after ${after - before}ms:`, {
         model: params.model,
         action: params.action,
-        duration,
+        error: error.message,
+        code: (error as any).code,
       });
+      throw error;
     }
-
-    return result;
   });
 
   return client;

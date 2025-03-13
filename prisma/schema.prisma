@@ -42,6 +42,10 @@ model Quiz {
   scheduledPost ScheduledPost[]
 
   @@index([userId])
+  @@index([title])
+  @@index([status])
+  @@index([createdAt])
+  @@index([templateId])
 }
 
 model ScheduledPost {
