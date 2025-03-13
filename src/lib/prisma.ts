@@ -5,6 +5,12 @@ import { Prisma, PrismaClient } from '@prisma/client';
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
 function createPrismaClient() {
+  // Get the base URL from environment variables
+  const baseUrl = process.env.POSTGRES_PRISMA_URL || '';
+
+  // Parse the URL to add optimal connection parameters
+  const enhancedUrl = enhanceConnectionUrl(baseUrl);
+
   // Connection pooling settings optimized for Supabase Pro in a serverless environment
   const connectionOptions: Prisma.PrismaClientOptions = {
     log: process.env.NODE_ENV === 'development'
@@ -12,10 +18,12 @@ function createPrismaClient() {
       : ['error'] as Prisma.LogLevel[],
     datasources: {
       db: {
-        url: process.env.POSTGRES_PRISMA_URL,
+        url: enhancedUrl, // Use our enhanced URL instead of the raw env var
       },
     },
   };
+
+  console.log('Connecting with enhanced URL parameters for Supabase Pro');
 
   const client = new PrismaClient(connectionOptions);
 
@@ -94,6 +102,55 @@ function createPrismaClient() {
   return client;
 }
 
+/**
+ * Enhances the database connection URL with optimal parameters for Supabase Pro
+ */
+function enhanceConnectionUrl(url: string): string {
+  if (!url) return url;
+
+  try {
+    // Keep the original URL if we're in development mode
+    if (process.env.NODE_ENV === 'development') {
+      return url;
+    }
+
+    // Parse the URL
+    const parsedUrl = new URL(url);
+
+    // Check if this is the Supabase pooler URL (port 6543)
+    const isPoolerUrl = parsedUrl.port === '6543';
+
+    if (isPoolerUrl) {
+      // Get existing parameters
+      const params = parsedUrl.searchParams;
+
+      // Add or override parameters for optimal Supabase Pro performance
+      params.set('pgbouncer', 'true');
+      params.set('connection_limit', '10');
+      params.set('pool_timeout', '20');
+      params.set('statement_timeout', '10000');
+
+      // Make sure we have SSL mode
+      if (!params.has('sslmode')) {
+        params.set('sslmode', 'require');
+      }
+
+      // Remove any Supabase-specific params that might conflict
+      params.delete('supa');
+
+      // Reconstruct the URL with our enhanced parameters
+      return parsedUrl.toString();
+    }
+
+    // If not a pooler URL, return unchanged
+    return url;
+  } catch (error) {
+    // If there's any error in parsing, just return the original URL
+    console.error('Error enhancing database URL:', error);
+    return url;
+  }
+}
+
 // Preserve connection pool across hot reloads in development
 export const prisma = globalForPrisma.prisma || createPrismaClient();
 
@@ -115,4 +172,4 @@ if (process.env.NODE_ENV === 'production') {
       process.exit(0);
     });
   });
-} 
+}
