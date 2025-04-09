@@ -613,7 +613,7 @@ export default function NewQuizPage() {
                                         {activeTab === "template" && currentTemplate?.quizType && (
                                             <Badge
                                                 variant="outline"
-                                                className={QUIZ_TYPE_DISPLAY[currentTemplate.quizType]?.badge || "bg-gray-500/10 text-gray-500 border-gray-200"}
+                                                className="bg-muted/60 text-foreground border-border"
                                             >
                                                 {QUIZ_TYPE_DISPLAY[currentTemplate.quizType]?.label || currentTemplate.quizType}
                                             </Badge>
