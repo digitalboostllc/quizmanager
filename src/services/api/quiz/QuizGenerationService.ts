@@ -50,6 +50,10 @@ export interface CompleteQuizGenerationOptions {
   quizType: QuizType;
   language: Language;
   content?: string;
+  options?: {
+    checkOnly?: boolean;
+    includeImage?: boolean;
+  };
 }
 
 export interface QuizGenerationResult {

@@ -1,16 +1,17 @@
-import { NextResponse } from "next/server";
-import puppeteer from 'puppeteer';
 import fs from 'fs/promises';
+import { NextResponse } from "next/server";
 import path from 'path';
+import puppeteer from 'puppeteer';
 
 export async function POST(request: Request) {
   console.log('Image generation request received');
   try {
     const { htmlContent, filename = 'quiz-preview.png' } = await request.json();
-    
-    // Sanitize filename for Content-Disposition header
-    const sanitizedFilename = encodeURIComponent(filename).replace(/[']/g, '%27');
-    console.log('Processing request with filename:', sanitizedFilename);
+
+    // Don't encode the slashes in the path for directory structure
+    // Only sanitize the actual filename part
+    const filenameWithPath = filename;
+    console.log('Processing request with filename:', filenameWithPath);
 
     // Construct the complete HTML with all necessary styles and fonts
     const completeHtml = `
@@ -230,9 +231,19 @@ export async function POST(request: Request) {
 
     // Save the complete HTML to debug folder
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const htmlFilename = `${sanitizedFilename.replace('.png', '')}-${timestamp}.html`;
+    const htmlFilename = `${filenameWithPath.replace('.png', '')}-${timestamp}.html`;
     const debugDir = path.join(process.cwd(), 'debug');
     await fs.mkdir(debugDir, { recursive: true });
+
+    // Create subdirectories if needed for HTML debug file
+    const htmlPathParts = htmlFilename.split('/');
+    if (htmlPathParts.length > 1) {
+      // If the filename contains directories, create them
+      const htmlDirPath = path.join(debugDir, ...htmlPathParts.slice(0, -1));
+      await fs.mkdir(htmlDirPath, { recursive: true });
+      console.log(`Created debug directory structure: ${htmlDirPath}`);
+    }
+
     const htmlPath = path.join(debugDir, htmlFilename);
     await fs.writeFile(htmlPath, completeHtml);
     console.log('HTML saved for debugging:', htmlPath);
@@ -241,7 +252,7 @@ export async function POST(request: Request) {
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
-    
+
     const page = await browser.newPage();
 
     // Set viewport with higher device scale factor for better quality
@@ -283,12 +294,43 @@ export async function POST(request: Request) {
     const publicImagesDir = path.join(process.cwd(), 'public', 'images');
     await fs.mkdir(publicImagesDir, { recursive: true });
 
-    // Save the image to the public folder
-    const publicImagePath = path.join(publicImagesDir, sanitizedFilename);
+    // Get the directory path from filenameWithPath if it contains a path
+    const filePathParts = filenameWithPath.split('/');
+    let finalFileName = filenameWithPath;
+    let targetDir = publicImagesDir;
+
+    // If the filename contains a folder structure
+    if (filePathParts.length > 1) {
+      // Get just the filename and sanitize it separately
+      let rawFilename = filePathParts.pop() || '';
+      // Sanitize only the filename part, not the path
+      finalFileName = encodeURIComponent(rawFilename).replace(/[']/g, '%27');
+
+      const nestedFolderPath = filePathParts.join('/');
+      targetDir = path.join(publicImagesDir, nestedFolderPath);
+
+      // Create any nested directories
+      await fs.mkdir(targetDir, { recursive: true });
+      console.log(`Created directory structure: ${targetDir}`);
+    } else {
+      // If it's just a filename with no path, sanitize the whole thing
+      finalFileName = encodeURIComponent(filenameWithPath).replace(/[']/g, '%27');
+    }
+
+    // Save the image to the public folder with the appropriate path
+    const publicImagePath = path.join(targetDir, finalFileName);
     await fs.writeFile(publicImagePath, imageBuffer);
 
-    // Return the public URL for the image
-    const imageUrl = `/images/${sanitizedFilename}`;
+    // Return the public URL for the image without encoding slashes
+    let imageUrl;
+    if (filePathParts.length > 1) {
+      // For nested paths, construct URL with proper slashes
+      const folderPath = filePathParts.join('/');
+      imageUrl = `/images/${folderPath}/${finalFileName}`;
+    } else {
+      imageUrl = `/images/${filenameWithPath}`;
+    }
+
     console.log('Image saved successfully:', imageUrl);
 
     return NextResponse.json({ imageUrl });

@@ -1,7 +1,69 @@
 import { authOptions } from '@/lib/auth/auth-options';
+import { verifyPassword } from '@/lib/auth/password';
+import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { getToken } from 'next-auth/jwt';
 import { NextRequest, NextResponse } from 'next/server';
+
+// Handle POST requests for credential authentication
+export async function POST(request: NextRequest) {
+    try {
+        // Parse the request body
+        const body = await request.json();
+        const { email, password } = body;
+
+        if (!email || !password) {
+            return NextResponse.json({
+                success: false,
+                error: 'Email and password are required'
+            }, { status: 400 });
+        }
+
+        // Find user by email
+        const user = await prisma.user.findUnique({
+            where: { email }
+        });
+
+        // No user or no password
+        if (!user || !user.password) {
+            return NextResponse.json({
+                success: false,
+                error: 'Invalid credentials'
+            }, { status: 401 });
+        }
+
+        // Verify password
+        const isValid = await verifyPassword(password, user.password);
+
+        if (!isValid) {
+            return NextResponse.json({
+                success: false,
+                error: 'Invalid credentials'
+            }, { status: 401 });
+        }
+
+        // Return authenticated user (excluding password)
+        const { password: _, ...userWithoutPassword } = user;
+
+        return NextResponse.json({
+            success: true,
+            user: {
+                id: userWithoutPassword.id,
+                name: userWithoutPassword.name,
+                email: userWithoutPassword.email,
+                role: userWithoutPassword.role,
+                image: userWithoutPassword.image,
+            }
+        });
+    } catch (error) {
+        console.error('Auth error:', error);
+        return NextResponse.json({
+            success: false,
+            error: 'Authentication failed',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        }, { status: 500 });
+    }
+}
 
 export async function GET(request: NextRequest) {
     try {

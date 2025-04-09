@@ -17,7 +17,7 @@ const MAX_METRICS = 1000; // Keep last 1000 requests
 
 // Helper to track API performance
 export function trackPerformance(
-    response: NextResponse,
+    response: NextResponse | null,
     path: string,
     method: string,
     startTime: number,
@@ -25,6 +25,31 @@ export function trackPerformance(
     error?: string
 ) {
     const duration = Date.now() - startTime;
+
+    // Handle potentially null response
+    if (!response) {
+        console.error(`Null response in trackPerformance for ${method} ${path}`);
+
+        const metrics: PerformanceMetrics = {
+            path,
+            method,
+            duration,
+            statusCode: 500, // Assume server error if response is null
+            timestamp: Date.now(),
+            cacheHit,
+            error: error || 'Null response',
+        };
+
+        metricsStore.push(metrics);
+
+        if (metricsStore.length > MAX_METRICS) {
+            metricsStore.shift();
+        }
+
+        console.error(`API error: ${method} ${path} - Null response`);
+        return;
+    }
+
     const metrics: PerformanceMetrics = {
         path,
         method,

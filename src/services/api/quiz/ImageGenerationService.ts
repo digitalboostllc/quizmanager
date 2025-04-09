@@ -33,10 +33,9 @@ export class ImageGenerationService {
         try {
             console.log('🖼️ ImageGenerationService: Starting image generation for quiz:', quizId);
 
-            // Get the quiz with its template
+            // Get the quiz first
             const quiz = await prisma.quiz.findUnique({
                 where: { id: quizId },
-                include: { template: true },
             });
 
             if (!quiz) {
@@ -44,15 +43,25 @@ export class ImageGenerationService {
                 throw new Error(`Quiz not found: ${quizId}`);
             }
 
-            console.log('✅ ImageGenerationService: Found quiz:', {
-                id: quiz.id,
-                title: quiz.title,
-                templateId: quiz.templateId,
-                hasTemplate: !!quiz.template,
+            // Fetch the template separately
+            const template = await prisma.template.findUnique({
+                where: { id: quiz.templateId },
             });
 
-            // Generate the image
-            const imageUrl = await this.generateImage(quiz);
+            if (!template) {
+                console.error('❌ ImageGenerationService: Template not found:', quiz.templateId);
+                throw new Error(`Template not found: ${quiz.templateId}`);
+            }
+
+            console.log('✅ ImageGenerationService: Found quiz and template:', {
+                quizId: quiz.id,
+                title: quiz.title,
+                templateId: quiz.templateId,
+                templateName: template.name,
+            });
+
+            // Generate the image with quiz and template
+            const imageUrl = await this.generateImage(quiz, template);
 
             // Update the quiz with the new image URL
             await prisma.quiz.update({
@@ -71,12 +80,13 @@ export class ImageGenerationService {
 
     /**
      * Generate an image for a quiz
-     * @param quiz Quiz object with template
+     * @param quiz Quiz object
+     * @param template Template object
      * @returns URL of the generated image
      */
-    private async generateImage(quiz: Quiz & { template: any }): Promise<string> {
+    private async generateImage(quiz: Quiz, template: any): Promise<string> {
         // Combine template and quiz variables
-        const templateVars = quiz.template.variables as Record<string, string | number | boolean | string[] | Record<string, unknown>> | null;
+        const templateVars = template.variables as Record<string, string | number | boolean | string[] | Record<string, unknown>> | null;
         const quizVars = quiz.variables as Record<string, string | number | boolean | string[] | Record<string, unknown>> | null;
 
         const variables = this.templateProcessor.combineVariables(
@@ -89,7 +99,7 @@ export class ImageGenerationService {
         );
 
         // Process template variables
-        const processedHtml = this.templateProcessor.processTemplate(quiz.template.html, variables);
+        const processedHtml = this.templateProcessor.processTemplate(template.html, variables);
 
         // Generate filename
         const timestamp = Date.now();
@@ -125,7 +135,7 @@ export class ImageGenerationService {
                         }
 
                         /* Template styles */
-                        ${quiz.template.css || ''}
+                        ${template.css || ''}
 
                         /* Quiz template styles */
                         .quiz-template {

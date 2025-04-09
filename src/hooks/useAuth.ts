@@ -1,314 +1,203 @@
 'use client';
 
-import { signIn, useSession } from 'next-auth/react';
+import { signIn, signOut, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
-// ======================================================================
-// TEMPORARY: AUTHENTICATION DISABLED FOR DEVELOPMENT
-// To re-enable auth, change this to false and restart the application
-// This should match the setting in middleware.ts
-// ======================================================================
-const DISABLE_AUTH = true;
-
-// Add TypeScript declaration for the global window property if not already defined
-declare global {
-    interface Window {
-        REDIRECT_LOOP_PROTECTION?: boolean;
-    }
+// Define UserRole enum locally to avoid Edge Runtime issues with imports
+export enum UserRole {
+    USER = 'USER',
+    ADMIN = 'ADMIN',
+    SUPER_ADMIN = 'SUPER_ADMIN'
 }
 
-export function useAuth() {
-    const { data: session, status, update } = useSession();
-    const router = useRouter();
+/**
+ * Helper to check if a user has admin privileges 
+ */
+export function isAdmin(role: string | undefined): boolean {
+    return role === UserRole.ADMIN || role === UserRole.SUPER_ADMIN;
+}
+
+/**
+ * Custom hook for authentication that provides enhanced functionality
+ * on top of the standard NextAuth useSession hook.
+ */
+export const useAuth = () => {
+    // Get session data from NextAuth
+    const { data: sessionData, status, update } = useSession();
+    const [loading, setLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [authAttempts, setAuthAttempts] = useState(0);
-    const lastUpdateTime = useRef(0);
-    const isRedirectingRef = useRef(false);
+    const router = useRouter();
 
-    // DEVELOPMENT OVERRIDE: Always return authenticated if auth is disabled
-    const isAuthenticated = DISABLE_AUTH ? true : status === 'authenticated';
-    const isLoading = DISABLE_AUTH ? false : status === 'loading';
+    // Determine if the user is authenticated based on session status
+    const isAuthenticated = status === 'authenticated' && !!sessionData;
+    const isLoading = status === 'loading';
 
-    // Mock user for development when auth is disabled
-    const user = DISABLE_AUTH ? {
-        id: 'dev-user-id',
-        name: 'Development User',
-        email: 'dev@example.com',
-        role: 'ADMIN',
-        image: null
-    } : session?.user;
+    // Get user from session
+    const user = sessionData?.user;
 
-    // Force update the session when the component mounts, but with throttling
+    // Check if the user has admin privileges
+    const userIsAdmin = isAdmin(user?.role);
+
+    // Clear any errors on session change
     useEffect(() => {
-        // Only try to update if not in loading state and more than 10 seconds since last update
-        const now = Date.now();
-        if (status !== 'loading' && now - lastUpdateTime.current > 10000) {
-            lastUpdateTime.current = now;
-            update();
-        }
-    }, [status, update]);
-
-    // Handle session recovery if there's an auth error
-    useEffect(() => {
-        // Skip if redirect protection is active
-        if (typeof window !== 'undefined' &&
-            (window.REDIRECT_LOOP_PROTECTION ||
-                sessionStorage.getItem('REDIRECT_LOOP_PROTECTION'))) {
-            return;
-        }
-
-        // If we detect a JWT error after multiple attempts, we may need to clear session
-        if (!isAuthenticated && !isLoading && authAttempts > 2) {
-            // Clear any invalid session data that might be causing persistent errors
-            const clearBrowserSession = () => {
-                console.log('Clearing session data after multiple auth attempts');
-                window.localStorage.removeItem('next-auth.session-token');
-                window.localStorage.removeItem('next-auth.callback-url');
-                window.localStorage.removeItem('next-auth.csrf-token');
-
-                // Try to clear cookies by expiring them
-                document.cookie = 'next-auth.session-token=; Max-Age=0; path=/; domain=' + window.location.hostname;
-                document.cookie = 'next-auth.csrf-token=; Max-Age=0; path=/; domain=' + window.location.hostname;
-                document.cookie = 'next-auth.callback-url=; Max-Age=0; path=/; domain=' + window.location.hostname;
-
-                // Use the custom cookie name if set
-                if (process.env.NEXT_PUBLIC_COOKIE_NAME) {
-                    document.cookie = `${process.env.NEXT_PUBLIC_COOKIE_NAME}=; Max-Age=0; path=/; domain=${process.env.NEXT_PUBLIC_COOKIE_DOMAIN || window.location.hostname}`;
-                }
-            };
-
-            // After clearing, try to update session again
-            clearBrowserSession();
-            setTimeout(() => {
-                update();
-                setAuthAttempts(0);
-            }, 500);
-        }
-    }, [isAuthenticated, isLoading, authAttempts, update]);
-
-    const login = async (email: string, password: string) => {
-        try {
-            setLoading(true);
+        if (sessionData) {
             setError(null);
-            setAuthAttempts(prev => prev + 1);
+        }
+    }, [sessionData]);
 
-            // Clear any previous session data before attempting login
-            const clearPreviousSession = () => {
-                // Clear localStorage items
-                window.localStorage.removeItem('next-auth.session-token');
-                window.localStorage.removeItem('next-auth.callback-url');
-                window.localStorage.removeItem('next-auth.csrf-token');
+    // Login function that uses NextAuth signIn
+    const login = useCallback(async (
+        email: string,
+        password: string,
+        redirectPath?: string
+    ) => {
+        setLoading(true);
+        setError(null);
 
-                // Clear cookies too - important for fixing cookie auth issues
-                document.cookie = 'next-auth.session-token=; Max-Age=0; path=/; domain=' + window.location.hostname;
-                document.cookie = 'next-auth.callback-url=; Max-Age=0; path=/; domain=' + window.location.hostname;
-                document.cookie = 'next-auth.csrf-token=; Max-Age=0; path=/; domain=' + window.location.hostname;
+        try {
+            console.log("Attempting login with credentials", { email, redirectPath });
 
-                // Also clear with path=/
-                document.cookie = 'next-auth.session-token=; Max-Age=0; path=/;';
-                document.cookie = 'next-auth.callback-url=; Max-Age=0; path=/;';
-                document.cookie = 'next-auth.csrf-token=; Max-Age=0; path=/;';
-
-                // Clear session storage as well
-                try {
-                    sessionStorage.removeItem('next-auth.callback-url');
-                    sessionStorage.removeItem('next-auth.message');
-                } catch (e) {
-                    // Silent fail
-                }
-            };
-
-            clearPreviousSession();
-
-            // Attempt sign in with callbackUrl explicitly set to avoid redirection issues
             const result = await signIn('credentials', {
                 redirect: false,
                 email,
                 password,
-                callbackUrl: '/profile', // Use profile as default for better auth testing
+                callbackUrl: redirectPath || '/dashboard'
             });
 
-            if (result?.error) {
-                // Detect specific JWT errors
-                if (result.error.includes('jwt') || result.error.includes('session')) {
-                    setError('Session error. Please try again.');
-                    // Attempt to refresh the session
-                    await update();
-                } else {
-                    setError('Invalid email or password');
-                }
+            console.log("SignIn result:", result);
 
+            if (result?.error) {
+                setError(result.error);
                 return false;
             }
 
-            // Force update session
+            // Force session update after successful login
             await update();
 
-            // Reset auth attempts on successful login
-            setAuthAttempts(0);
+            // Use timeout to ensure session state is updated before redirect
+            setTimeout(() => {
+                // Navigate to the return URL
+                router.push(redirectPath || '/dashboard');
+            }, 100);
 
-            // Ensure cookies are properly set by making a separate request
-            try {
-                const cookieFixResponse = await fetch('/api/auth/csrf', {
-                    method: 'GET',
-                    credentials: 'include',  // Important for cookies
-                });
-            } catch (e) {
-                // Silent fail - don't block login if this fails
-            }
-
-            // Use the URL from the result or default to profile page
-            const returnUrl = result?.url || '/profile';
-            router.push(returnUrl);
             return true;
-        } catch (error) {
-            setError('An unexpected error occurred. Please try again.');
+        } catch (err) {
+            console.error('Login error:', err);
+            setError('An unexpected error occurred');
             return false;
         } finally {
             setLoading(false);
         }
-    };
+    }, [router, update]);
 
-    const register = async (name: string, email: string, password: string) => {
+    // Register function
+    const register = useCallback(async (
+        name: string,
+        email: string,
+        password: string
+    ) => {
+        setLoading(true);
+        setError(null);
+
         try {
-            setLoading(true);
-            setError(null);
-
-            const response = await fetch('/api/auth/register', {
+            // Register the user via API
+            const res = await fetch('/api/auth/register', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ name, email, password }),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, email, password })
             });
 
-            const data = await response.json();
+            const data = await res.json();
 
-            if (!response.ok) {
+            if (!res.ok) {
                 setError(data.error || 'Registration failed');
                 return false;
             }
 
-            // Auto login after successful registration
+            // If registration is successful, immediately log in
             return await login(email, password);
         } catch (err) {
             console.error('Registration error:', err);
-            setError('An error occurred during registration');
+            setError('An unexpected error occurred');
             return false;
         } finally {
             setLoading(false);
         }
-    };
+    }, [login]);
 
-    const logout = async () => {
+    // Logout function
+    const logout = useCallback(async () => {
+        setLoading(true);
         try {
-            // Instead of trying to handle all cleanup here,
-            // redirect to the dedicated logout page
-            router.push('/auth/logout');
-        } catch (error) {
-            console.error('Logout error:', error);
-
-            // If there's an error redirecting, try a basic cleanup and redirect
-            window.localStorage.removeItem('next-auth.session-token');
-            document.cookie = 'next-auth.session-token=; Max-Age=0; path=/; domain=' + window.location.hostname;
-
-            // Force redirect to home even if logout fails
+            await signOut({ redirect: false });
             router.push('/');
+            return true;
+        } catch (err) {
+            console.error('Logout error:', err);
+            setError('Logout failed');
+            return false;
+        } finally {
+            setLoading(false);
         }
-    };
+    }, [router]);
 
-    // Method to check and refresh session with throttling
-    const refreshSession = async () => {
+    // Refresh session data
+    const refreshSession = useCallback(async () => {
         try {
-            const now = Date.now();
-            // Only update if at least 5 seconds have passed since last update
-            if (now - lastUpdateTime.current < 5000) {
-                console.log('Session refresh throttled');
-                return true;
-            }
-
-            lastUpdateTime.current = now;
             await update();
             return true;
-        } catch (error) {
-            console.error('Session refresh error:', error);
+        } catch (err) {
+            console.error('Failed to refresh session:', err);
             return false;
         }
+    }, [update]);
+
+    /**
+     * Check if the current user has a specific role
+     */
+    const hasRole = (role: UserRole) => {
+        if (!isAuthenticated || !user) return false;
+        return user.role === role;
     };
 
-    // Attempt to detect if we're being redirected due to auth issues
+    /**
+     * Check if the current user is an admin
+     */
+    const checkIsAdmin = () => {
+        if (!isAuthenticated || !user) return false;
+        return user.role === UserRole.ADMIN || user.role === UserRole.SUPER_ADMIN;
+    };
+
+    // Automatically refresh session when component mounts
     useEffect(() => {
-        // Skip if redirect protection is active or redirect is already in progress
-        if (typeof window !== 'undefined' &&
-            (window.REDIRECT_LOOP_PROTECTION ||
-                sessionStorage.getItem('REDIRECT_LOOP_PROTECTION') ||
-                sessionStorage.getItem('auth_redirect_in_progress') ||
-                isRedirectingRef.current)) {
-            return;
+        if (!isLoading && !isAuthenticated) {
+            update();
         }
-
-        const checkForAuthRedirect = () => {
-            // Check if URL contains callbackUrl parameter indicating a redirect from auth
-            const url = new URL(window.location.href);
-            const callbackUrl = url.searchParams.get('callbackUrl');
-
-            // Track number of redirects to detect loops
-            let redirectCount = parseInt(sessionStorage.getItem('auth_redirect_count') || '0');
-
-            if (callbackUrl && isAuthenticated) {
-                // Check if we're in a potential loop
-                if (redirectCount > 4) {
-                    sessionStorage.setItem('REDIRECT_LOOP_PROTECTION', 'true');
-                    window.REDIRECT_LOOP_PROTECTION = true;
-
-                    // Force navigation to home to break the cycle
-                    setTimeout(() => {
-                        router.push('/');
-                    }, 100);
-                    return;
-                }
-
-                // Set redirect lock and increment counter
-                sessionStorage.setItem('auth_redirect_count', (redirectCount + 1).toString());
-                sessionStorage.setItem('auth_redirect_in_progress', 'true');
-                isRedirectingRef.current = true;
-
-                // We're authenticated but still got redirected, let's handle this
-                router.push(callbackUrl);
-
-                // Clear the lock after navigation
-                setTimeout(() => {
-                    isRedirectingRef.current = false;
-                    sessionStorage.removeItem('auth_redirect_in_progress');
-                }, 1000);
-            }
-        };
-
-        // Only run this effect when we're fully mounted and authentication state is determined
-        if (!isLoading) {
-            checkForAuthRedirect();
-        }
-    }, [isAuthenticated, isLoading, router]);
-
-    // Reset navigation tracking when reaching home page
-    useEffect(() => {
-        if (typeof window !== 'undefined' && window.location.pathname === '/') {
-            sessionStorage.removeItem('auth_redirect_count');
-            isRedirectingRef.current = false;
-        }
-    }, []);
+    }, [isLoading, isAuthenticated, update]);
 
     return {
+        // Auth state
         user,
+        session: sessionData,
+        status,
         isAuthenticated,
         isLoading,
         error,
         loading,
+
+        // Auth actions
         login,
         register,
         logout,
         refreshSession,
+
+        // Role checks
+        hasRole,
+        isAdmin: checkIsAdmin,
+        userIsAdmin,
     };
-} 
+};
+
+// Export default for backward compatibility
+export default useAuth; 

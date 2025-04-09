@@ -50,18 +50,34 @@ export function QuizCardSkeleton({ className, view = "grid" }: SkeletonProps & {
     }
 
     return (
-        <Card className={cn("border border-border/50 shadow-sm overflow-hidden h-full flex flex-col", className)}>
-            <div className="aspect-square bg-muted animate-pulse" />
-            <CardContent className="p-6 flex-1">
-                <div className="space-y-2">
-                    <Skeleton className="h-5 w-3/4" />
-                    <Skeleton className="h-4 w-1/2" />
+        <Card className={cn("border border-border/40 shadow-sm overflow-hidden h-full flex flex-col bg-background/50", className)}>
+            <div className="aspect-square relative bg-secondary/30 animate-pulse">
+                <div className="absolute top-3 left-3">
+                    <Skeleton className="h-5 w-20 rounded-full" />
                 </div>
-                <div className="flex justify-between items-center mt-6">
-                    <Skeleton className="h-4 w-16" />
-                    <Skeleton className="h-8 w-8 rounded-full" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="h-16 w-16 rounded-full bg-background/80 flex items-center justify-center">
+                        <Skeleton className="h-8 w-8 rounded" />
+                    </div>
+                </div>
+            </div>
+            <CardContent className="p-5 flex-1">
+                <Skeleton className="h-5 w-3/4 mb-3" />
+                <div className="space-y-3 mt-2">
+                    <div className="flex items-center gap-2">
+                        <Skeleton className="h-3.5 w-3.5 rounded-full" />
+                        <Skeleton className="h-3.5 w-1/3" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Skeleton className="h-3.5 w-3.5 rounded-full" />
+                        <Skeleton className="h-3.5 w-2/3" />
+                    </div>
                 </div>
             </CardContent>
+            <CardFooter className="px-5 py-4 border-t border-border/30 flex justify-between items-center bg-secondary/5">
+                <Skeleton className="h-8 w-24 rounded-md" />
+                <Skeleton className="h-8 w-8 rounded" />
+            </CardFooter>
         </Card>
     );
 }

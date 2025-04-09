@@ -1,6 +1,9 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import { encrypt } from '@/lib/crypto';
+import { prisma } from '@/lib/prisma';
+import { NextResponse } from 'next/server';
+
+// Set runtime to Node.js since this file uses crypto module indirectly via encrypt
+export const runtime = 'nodejs';
 
 // GET /api/settings/facebook
 export async function GET() {
@@ -34,7 +37,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { appId, appSecret, pageId, pageAccessToken, pageName } = body;
 
-    console.log('Received settings:', { 
+    console.log('Received settings:', {
       hasAppId: !!appId,
       hasAppSecret: !!appSecret,
       hasPageId: !!pageId,

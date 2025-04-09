@@ -1,6 +1,6 @@
+import { QuizType } from '@prisma/client';
 import { Grid, Hash, Music, Network } from "lucide-react";
 import type { ComponentType } from 'react';
-import { QuizType } from '@prisma/client';
 
 export type QuizTypeDisplayInfo = {
   title: string;

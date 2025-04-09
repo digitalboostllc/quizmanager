@@ -1,0 +1,368 @@
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            /* Reset styles */
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+
+            /* Font faces */
+            @font-face {
+              font-family: 'Rooftop';
+              src: url('/Users/said/quizzer/public/fonts/Rooftop-Regular.otf') format('opentype');
+              font-weight: 400;
+              font-style: normal;
+            }
+
+            @font-face {
+              font-family: 'Rooftop';
+              src: url('/Users/said/quizzer/public/fonts/Rooftop-Bold.otf') format('opentype');
+              font-weight: 700;
+              font-style: normal;
+            }
+
+            /* Base styles */
+            body {
+              width: 1080px;
+              height: 1080px;
+              margin: 0;
+              padding: 0;
+              background: white;
+              font-family: 'Rooftop', system-ui, -apple-system, sans-serif;
+            }
+
+            /* Quiz template styles */
+            .quiz-template {
+              width: 100%;
+              height: 100%;
+              background: linear-gradient(135deg, #1a365d 0%, #2d3748 100%);
+              color: #e2e8f0;
+              display: flex;
+              flex-direction: column;
+              padding: 3rem;
+              font-family: 'Rooftop', system-ui, -apple-system, sans-serif;
+            }
+
+            .quiz-header {
+              text-align: center;
+              margin-bottom: 2rem;
+            }
+
+            .quiz-header h1 {
+              font-size: 3rem;
+              font-weight: 700;
+              margin: 0;
+              line-height: 1.2;
+              background: linear-gradient(135deg, #60a5fa 0%, #c084fc 100%);
+              -webkit-background-clip: text;
+              -webkit-text-fill-color: transparent;
+              text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+
+            .subtitle {
+              font-size: 1.25rem;
+              margin-top: 0.75rem;
+              color: #94a3b8;
+            }
+
+            .instructions-legend {
+              display: flex;
+              flex-direction: column;
+              gap: 0.75rem;
+              margin-bottom: 2rem;
+              background: rgba(255, 255, 255, 0.05);
+              padding: 1.5rem 2rem;
+              border-radius: 12px;
+              width: 100%;
+              backdrop-filter: blur(8px);
+              border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+
+            .legend-item {
+              display: flex;
+              align-items: center;
+              gap: 1rem;
+            }
+
+            .legend-box {
+              width: 1.5rem;
+              height: 1.5rem;
+              border-radius: 4px;
+              flex-shrink: 0;
+            }
+
+            .legend-box.correct {
+              background: linear-gradient(135deg, #34d399 0%, #059669 100%);
+              box-shadow: 0 2px 8px rgba(52, 211, 153, 0.2);
+            }
+
+            .legend-box.misplaced {
+              background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+              box-shadow: 0 2px 8px rgba(251, 191, 36, 0.2);
+            }
+
+            .legend-box.wrong {
+              background: linear-gradient(135deg, #4b5563 0%, #1f2937 100%);
+              box-shadow: 0 2px 8px rgba(75, 85, 99, 0.2);
+            }
+
+            .legend-text {
+              font-size: 0.9rem;
+              color: #94a3b8;
+              line-height: 1.4;
+            }
+
+            .quiz-content {
+              flex: 1;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              gap: 2rem;
+            }
+
+            .word-grid-container {
+              display: flex;
+              flex-direction: column;
+              gap: 1.5rem;
+              width: 100%;
+              max-width: 600px;
+              margin: 0 auto;
+            }
+
+            .word-attempt {
+              display: flex;
+              align-items: center;
+              gap: 1rem;
+              width: 100%;
+              justify-content: center;
+            }
+
+            .word-grid-row {
+              display: flex;
+              gap: 0.75rem;
+              justify-content: center;
+            }
+
+            .letter-box {
+              width: 6rem;
+              height: 6rem;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 4rem;
+              font-weight: 600;
+              border-radius: 12px;
+              text-transform: uppercase;
+              transition: all 0.3s ease;
+              background: rgba(255, 255, 255, 0.05);
+              backdrop-filter: blur(8px);
+              border: 1px solid rgba(255, 255, 255, 0.1);
+              color: #e2e8f0;
+            }
+
+            .letter-box.correct {
+              background: linear-gradient(135deg, #34d399 0%, #059669 100%);
+              color: white;
+              box-shadow: 0 4px 12px rgba(52, 211, 153, 0.2);
+              border: none;
+            }
+
+            .letter-box.misplaced {
+              background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+              color: white;
+              box-shadow: 0 4px 12px rgba(251, 191, 36, 0.2);
+              border: none;
+            }
+
+            .letter-box.wrong {
+              background: linear-gradient(135deg, #4b5563 0%, #1f2937 100%);
+              color: #94a3b8;
+              box-shadow: 0 4px 12px rgba(75, 85, 99, 0.2);
+              border: none;
+            }
+
+            .quiz-footer {
+              text-align: center;
+              margin-top: 3rem;
+              padding: 1.5rem 2rem;
+              background: rgba(255, 255, 255, 0.05);
+              backdrop-filter: blur(8px);
+              border-radius: 12px;
+              width: 100%;
+              border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+
+            .branding {
+              font-size: 1rem;
+              color: #94a3b8;
+              background: linear-gradient(135deg, #60a5fa 0%, #c084fc 100%);
+              -webkit-background-clip: text;
+              -webkit-text-fill-color: transparent;
+            }
+          </style>
+        </head>
+        <body>
+          
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <style>
+      /* Reset styles */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      /* Base styles */
+      body {
+        width: 1080px;
+        height: 1080px;
+        margin: 0;
+        padding: 0;
+        background: white;
+      }
+
+      /* Template styles */
+      
+    .quiz-template {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #1a365d 0%, #2d3748 100%);
+      color: #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      padding: 3rem;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    .quiz-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .quiz-header h1 {
+      font-size: 3rem;
+      font-weight: 700;
+      margin: 0;
+      line-height: 1.2;
+      background: linear-gradient(135deg, #60a5fa 0%, #c084fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .subtitle {
+      font-size: 1.25rem;
+      margin-top: 0.75rem;
+      color: #94a3b8;
+    }
+
+    .quiz-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2rem;
+    }
+
+    .rhyme-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.5rem;
+      padding: 2rem;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 16px;
+      box-shadow: 0 4px 15px -3px rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      width: 100%;
+      max-width: 800px;
+      backdrop-filter: blur(8px);
+    }
+
+    .rhyme-card {
+      background: linear-gradient(135deg, rgba(96, 165, 250, 0.1) 0%, rgba(192, 132, 252, 0.1) 100%);
+      padding: 1.5rem;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      transition: all 0.3s ease;
+      text-align: center;
+      backdrop-filter: blur(8px);
+    }
+
+    .rhyme-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      background: linear-gradient(135deg, rgba(96, 165, 250, 0.2) 0%, rgba(192, 132, 252, 0.2) 100%);
+    }
+
+    .rhyme-text {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      margin: 0;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .rhyme-card.missing {
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px dashed rgba(255, 255, 255, 0.2);
+    }
+
+    .rhyme-card.missing .rhyme-text {
+      color: rgba(255, 255, 255, 0.4);
+    }
+
+    .quiz-footer {
+      text-align: center;
+      margin-top: 3rem;
+      padding: 1.5rem 2rem;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      width: 100%;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(8px);
+    }
+
+    .branding {
+      font-size: 1rem;
+      color: #94a3b8;
+      background: linear-gradient(135deg, #60a5fa 0%, #c084fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+  
+    </style>
+  </head>
+  <body>
+    
+    <div class="quiz-template">
+      <div class="quiz-header">
+        <h1>Rhymes in Flow</h1>
+        <p class="subtitle">Find the rhyming words in this colorful journey</p>
+      </div>
+      <div class="quiz-content">
+        <div class="rhyme-container">
+          
+        </div>
+      </div>
+      <div class="quiz-footer">
+        <p class="branding">Flow with Words</p>
+      </div>
+    </div>
+  
+  </body>
+</html>
+
+        </body>
+      </html>
+    

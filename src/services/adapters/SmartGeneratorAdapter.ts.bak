@@ -1,0 +1,2081 @@
+import { Language } from '@/lib/types';
+import { ImageGenerationService } from '@/services/api/quiz/ImageGenerationService';
+import { CompleteQuizGenerationResult, QuizGenerationService } from '@/services/api/quiz/QuizGenerationService';
+import { QuizType } from '@prisma/client';
+import { v4 as uuidv4 } from 'uuid';
+
+// Simple mock for the dictionary service functionality
+class MockDictionaryService {
+    private static instance: MockDictionaryService;
+
+    public static getInstance(): MockDictionaryService {
+        if (!MockDictionaryService.instance) {
+            MockDictionaryService.instance = new MockDictionaryService();
+        }
+        return MockDictionaryService.instance;
+    }
+
+    public async initialize(): Promise<void> {
+        console.log('📚 Mock Dictionary Service initialized');
+    }
+
+    public async getRandomWord(language: Language, options: any): Promise<string> {
+        // Return a simple word based on the language
+        const wordsByLanguage = {
+            en: ['quiz', 'word', 'game', 'play', 'solve', 'guess'],
+            fr: ['jeux', 'jouer', 'mot', 'quiz', 'devinette'],
+            es: ['juego', 'palabra', 'quiz', 'adivinar'],
+            de: ['wort', 'spiel', 'quiz', 'raten'],
+            it: ['gioco', 'parola', 'quiz', 'indovinare']
+        };
+
+        const safeLang = (language in wordsByLanguage) ? language : 'en';
+        const words = wordsByLanguage[safeLang as keyof typeof wordsByLanguage];
+        const randomWord = words[Math.floor(Math.random() * words.length)];
+
+        console.log(`📚 Mock Dictionary: Generated "${randomWord}" for ${language}`);
+        return randomWord;
+    }
+
+    public async markWordAsUsed(word: string, language: Language): Promise<void> {
+        console.log(`📚 Mock Dictionary: Marked "${word}" as used in ${language}`);
+    }
+}
+
+/**
+ * Interface for quiz batch generation options
+ */
+export interface QuizBatchGenerationOptions {
+    templateId: string;
+    count: number;
+    topic?: string;
+    difficulty?: string;
+    scheduling?: {
+        strategy: string;
+        distribution: Array<{
+            date: string;
+            slotId: string;
+            weight: number;
+        }>;
+    };
+}
+
+/**
+ * Interface for generated quiz with questions and options
+ */
+export interface GeneratedQuiz {
+    title: string;
+    description?: string;
+    scheduledAt?: string;
+    questions: Array<{
+        text: string;
+        type?: string;
+        options: Array<{
+            text: string;
+            isCorrect: boolean;
+        }>;
+    }>;
+}
+
+/**
+ * Adapter for connecting the Smart Generator to the centralized QuizGenerationService
+ * This allows the Smart Generator to use the same generation logic as the regular quiz creator
+ */
+export class SmartGeneratorAdapter {
+    private quizGenerationService = QuizGenerationService.getInstance();
+    // Replace with the mock dictionary service
+    private dictionaryService = MockDictionaryService.getInstance();
+    private imageGenerationService = ImageGenerationService.getInstance();
+
+    /**
+     * Generates a batch of quizzes for the Smart Generator
+     * @param options Options for generating the quiz batch
+     * @returns Generated quizzes with scheduling information
+     */
+    async generateQuizBatch(options: QuizBatchGenerationOptions): Promise<{ quizzes: GeneratedQuiz[] }> {
+        console.log('📊 SmartGeneratorAdapter: Generating quiz batch with options:', JSON.stringify(options));
+
+        try {
+            const { templateId, count, topic, difficulty = 'medium', scheduling } = options;
+
+            // Initialize mock dictionary service
+            try {
+                await this.dictionaryService.initialize();
+            } catch (error) {
+                console.warn('⚠️ SmartGeneratorAdapter: Dictionary initialization failed. Continuing without dictionary support:', error);
+            }
+
+            // Generate multiple quizzes
+            const quizzes: GeneratedQuiz[] = [];
+
+            // Get template to determine quiz type
+            const template = await this.getTemplate(templateId);
+            if (!template) {
+                throw new Error(`Template not found: ${templateId}`);
+            }
+
+            const quizType = template.quizType;
+
+            // Generate quizzes
+            for (let i = 0; i < count; i++) {
+                console.log(`📝 SmartGeneratorAdapter: Generating quiz ${i + 1}/${count}`);
+
+                try {
+                    // Generate content based on quiz type and difficulty
+                    const quizContent = await this.generateQuizContent({
+                        templateId,
+                        templateType: quizType,
+                        theme: topic,
+                        difficulty: difficulty.toLowerCase(),
+                        language: 'en'
+                    });
+
+                    // Create quiz object with questions and options
+                    const quiz: GeneratedQuiz = {
+                        title: quizContent.title,
+                        description: quizContent.subtitle || '',
+                        questions: [
+                            {
+                                text: quizContent.title,
+                                type: 'MULTIPLE_CHOICE',
+                                options: [
+                                    { text: quizContent.answer, isCorrect: true },
+                                    // Generate some fake options for multiple choice
+                                    { text: `Option ${i + 2}`, isCorrect: false },
+                                    { text: `Option ${i + 3}`, isCorrect: false },
+                                    { text: `Option ${i + 4}`, isCorrect: false }
+                                ]
+                            }
+                        ]
+                    };
+
+                    // Add scheduling information if provided
+                    if (scheduling && scheduling.distribution && scheduling.distribution.length > 0) {
+                        const slotIndex = i % scheduling.distribution.length;
+                        const slot = scheduling.distribution[slotIndex];
+
+                        // Create scheduled date from slot data
+                        quiz.scheduledAt = this.createScheduledDate(slot.date, slot.slotId);
+                    }
+
+                    quizzes.push(quiz);
+                    console.log(`✅ SmartGeneratorAdapter: Generated quiz ${i + 1}/${count}: ${quiz.title}`);
+                } catch (error) {
+                    console.error(`❌ SmartGeneratorAdapter: Error generating quiz ${i + 1}/${count}:`, error);
+                    // Create a fallback quiz if generation fails
+                    const fallbackQuiz: GeneratedQuiz = {
+                        title: `${this.getQuizTypeName(quizType)} Quiz ${i + 1}`,
+                        description: `A ${difficulty} level quiz`,
+                        questions: [
+                            {
+                                text: 'Fallback question',
+                                type: 'MULTIPLE_CHOICE',
+                                options: [
+                                    { text: 'Correct Answer', isCorrect: true },
+                                    { text: 'Wrong Answer 1', isCorrect: false },
+                                    { text: 'Wrong Answer 2', isCorrect: false },
+                                    { text: 'Wrong Answer 3', isCorrect: false }
+                                ]
+                            }
+                        ]
+                    };
+                    quizzes.push(fallbackQuiz);
+                }
+            }
+
+            console.log(`✅ SmartGeneratorAdapter: Generated ${quizzes.length} quizzes`);
+            return { quizzes };
+        } catch (error) {
+            console.error('❌ SmartGeneratorAdapter: Error generating quiz batch:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Generates an image for a quiz using the ImageGenerationService
+     * @param params Parameters for image generation
+     * @returns Object containing the image URL
+     */
+    async generateImageForQuiz(params: { quizId: string; title: string }): Promise<{ imageUrl: string }> {
+        console.log('🖼️ SmartGeneratorAdapter: Generating image for quiz:', params.quizId);
+
+        try {
+            // Use the centralized image generation service
+            const result = await this.imageGenerationService.generateQuizImage(params.quizId);
+
+            console.log(`✅ SmartGeneratorAdapter: Generated image for quiz ${params.quizId}: ${result.imageUrl}`);
+            return result;
+        } catch (error) {
+            console.error(`❌ SmartGeneratorAdapter: Error generating image for quiz ${params.quizId}:`, error);
+            // Return a fallback image URL
+            return { imageUrl: `/images/fallback-quiz-image.png` };
+        }
+    }
+
+    /**
+     * Creates a scheduled date string from date and time slot
+     */
+    private createScheduledDate(dateStr: string, timeSlotId: string): string {
+        const date = new Date(dateStr);
+
+        // Set default time based on time slot
+        switch (timeSlotId) {
+            case 'morning':
+                date.setHours(9, 0, 0, 0);
+                break;
+            case 'lunch':
+                date.setHours(12, 0, 0, 0);
+                break;
+            case 'afternoon':
+                date.setHours(15, 0, 0, 0);
+                break;
+            case 'evening':
+                date.setHours(18, 0, 0, 0);
+                break;
+            case 'night':
+                date.setHours(21, 0, 0, 0);
+                break;
+            default:
+                date.setHours(12, 0, 0, 0);
+                break;
+        }
+
+        return date.toISOString();
+    }
+
+    /**
+     * Gets a template by ID
+     */
+    private async getTemplate(templateId: string) {
+        try {
+            // Use the Prisma client to fetch the template
+            const { db } = await import('@/lib/db');
+            const template = await db.template.findUnique({
+                where: { id: templateId }
+            });
+
+            return template;
+        } catch (error) {
+            console.error('❌ SmartGeneratorAdapter: Error fetching template:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Generates quiz content using the centralized quiz generation service
+     */
+    async generateQuizContent(params: {
+        templateType: QuizType,
+        theme?: string,
+        difficulty: string,
+        language: string,
+        templateId: string,
+        unique?: string // Optional unique marker to generate varied content
+    }): Promise<CompleteQuizGenerationResult> {
+        console.log('📊 SmartGeneratorAdapter: Generating quiz content with params:', {
+            templateType: params.templateType,
+            theme: params.theme,
+            difficulty: params.difficulty,
+            language: params.language,
+            unique: params.unique ? 'provided' : 'not provided' // Log if unique marker was provided
+        });
+
+        // Language support verification and logging
+        const supportedLanguages = ['en', 'fr', 'es', 'de', 'it', 'pt'];
+        if (!supportedLanguages.includes(params.language)) {
+            console.warn(`⚠️ SmartGeneratorAdapter: Language ${params.language} not fully supported, falling back to English where needed`);
+        } else {
+            console.log(`🌐 SmartGeneratorAdapter: Generating content in ${params.language} language`);
+        }
+
+        try {
+            // Initialize mock dictionary service
+            try {
+                await this.dictionaryService.initialize();
+            } catch (dictionaryError) {
+                console.warn('⚠️ SmartGeneratorAdapter: Dictionary initialization failed. Continuing without dictionary support:', dictionaryError);
+            }
+
+            // Get language-appropriate context for enhanced prompts
+            const languageContext = this.getLanguageContext(params.language);
+
+            // For specific quiz types like WORDLE, ensure we're using language-appropriate words
+            if (params.templateType === QuizType.WORDLE) {
+                // Try to get a word from the language-specific dictionary if available
+                const wordLength = this.getWordLengthBasedOnDifficulty(params.difficulty);
+                console.log(`🔤 SmartGeneratorAdapter: Attempting to get a ${wordLength}-letter word in ${params.language}`);
+
+                // We'll use this information to enhance the prompt
+                let languageSpecificPrompt = `${languageContext.generateIn} a ${params.difficulty} ${this.getQuizTypeName(params.templateType)} quiz`;
+
+                if (params.theme) {
+                    languageSpecificPrompt += ` ${languageContext.aboutTheme} ${params.theme}`;
+                }
+
+                languageSpecificPrompt += `. ${languageContext.ensureWord} ${wordLength} ${languageContext.letters}.`;
+
+                // Update the content to include language-specific instructions
+                params.theme = languageSpecificPrompt;
+            } else {
+                // For other quiz types, still provide language context
+                let enhancedTheme = params.theme || `${languageContext.a} ${params.difficulty} ${languageContext.level} quiz`;
+                enhancedTheme = `${languageContext.generateIn} ${enhancedTheme}`;
+                params.theme = enhancedTheme;
+            }
+
+            // Generate content based on template type, difficulty, and theme
+            let result: CompleteQuizGenerationResult;
+
+            // Use the centralized quiz generation service to get base content
+            console.log(`🌐 SmartGeneratorAdapter: Sending enhanced theme to AI generator: "${params.theme}"`);
+            const quizResponse = await this.quizGenerationService.generateCompleteQuiz({
+                templateId: params.templateId,
+                quizType: params.templateType,
+                language: params.language as Language,
+                content: params.theme
+            });
+
+            if (!quizResponse.data) {
+                throw new Error('Failed to generate quiz content');
+            }
+
+            // Use the API response data
+            result = quizResponse.data;
+
+            // Enhance the result with additional content and metadata
+            result = this.enhanceResult(
+                result,
+                params.difficulty,
+                params.templateType,
+                params.unique,
+                params.language
+            );
+
+            // Validate language-specific content
+            if (params.language !== 'en') {
+                result = this.validateLanguageContent(result, params.language, params.templateType);
+            }
+
+            console.log(`✅ SmartGeneratorAdapter: Generated quiz content with theme: ${params.theme || 'none'}`);
+            return result;
+        } catch (error) {
+            console.error('❌ SmartGeneratorAdapter: Error generating quiz content:', error);
+            return this.createFallbackQuizResult(
+                params.templateType,
+                params.theme || 'General Knowledge',
+                params.difficulty,
+                params.language as Language
+            );
+        }
+    }
+
+    /**
+     * Gets a word from the dictionary or uses a fallback mechanism
+     * @param language Language for the word
+     * @param wordLength Approximate desired word length
+     * @param difficulty Difficulty level
+     */
+    private async getWordFromDictionary(language: Language, wordLength: number, difficulty: string): Promise<string | null> {
+        try {
+            console.log(`🔍 SmartGeneratorAdapter: Getting ${wordLength}-letter word in ${language} language`);
+
+            // Check if dictionary is initialized
+            if (!this.dictionaryService) {
+                console.warn('⚠️ SmartGeneratorAdapter: Dictionary service not available');
+                return null;
+            }
+
+            // Map difficulty to word difficulty
+            const wordDifficulty = this.mapDifficultyLevel(difficulty);
+
+            // Get random word from dictionary
+            const word = await this.dictionaryService.getRandomWord(language, {
+                wordLength,
+                difficulty: wordDifficulty,
+                noAccents: true
+            });
+
+            if (!word) {
+                console.warn(`⚠️ SmartGeneratorAdapter: No ${wordLength}-letter word found in ${language} dictionary`);
+                return null;
+            }
+
+            console.log(`✅ SmartGeneratorAdapter: Got word from dictionary: ${word}`);
+            return word.toUpperCase();
+        } catch (error) {
+            console.error('❌ SmartGeneratorAdapter: Error getting word from dictionary:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Returns a safe language key for fallback dictionaries
+     */
+    private getSafeLanguage(language: Language): 'en' | 'fr' | 'es' | 'de' | 'it' {
+        return ['en', 'fr', 'es', 'de', 'it'].includes(language)
+            ? language as 'en' | 'fr' | 'es' | 'de' | 'it'
+            : 'en';
+    }
+
+    /**
+     * Maps difficulty level to word difficulty
+     */
+    private mapDifficultyLevel(difficulty: string): 'easy' | 'medium' | 'hard' {
+        switch (difficulty) {
+            case 'easy':
+                return 'easy';
+            case 'medium':
+                return 'medium';
+            case 'hard':
+                return 'hard';
+            case 'progressive':
+                return 'medium';
+            default:
+                return 'medium';
+        }
+    }
+
+    /**
+     * Determines word length based on difficulty
+     */
+    private getWordLengthBasedOnDifficulty(difficulty: string): number {
+        switch (difficulty) {
+            case 'easy':
+                return 4; // Shorter words for easier puzzles
+            case 'medium':
+                return 5; // Standard WORDLE length
+            case 'hard':
+                return 6; // Longer words for harder puzzles
+            case 'progressive':
+                return 5; // Default to standard length
+            default:
+                return 5; // Default to standard length
+        }
+    }
+
+    /**
+     * Enhances the generation result to ensure all required fields are present
+     */
+    private enhanceResult(
+        result: CompleteQuizGenerationResult,
+        difficulty: string,
+        quizType: QuizType,
+        uniqueMarker?: string,
+        language?: string
+    ): CompleteQuizGenerationResult {
+        // Ensure variables object exists
+        if (!result.variables) {
+            result.variables = {};
+        }
+
+        // Get quiz type name for titles
+        const quizTypeName = this.getQuizTypeName(quizType);
+
+        // Use uniqueMarker to ensure variation in titles if available
+        const variationSeed = uniqueMarker ? parseInt(uniqueMarker.substring(0, 8), 16) % 1000 : Date.now() % 1000;
+        const titleVariations = [
+            `${quizTypeName} Challenge`,
+            `${quizTypeName} Puzzle`,
+            `${quizTypeName} Brain Teaser`,
+            `${quizTypeName} Mystery`,
+            `${quizTypeName} Problem`
+        ];
+
+        // Hint variations
+        const hintVariations = [
+            `Look for patterns and think carefully about your answer`,
+            `Take your time and analyze the problem methodically`,
+            `Consider different approaches to solve this challenge`,
+            `Think outside the box for this one`,
+            `The solution might be simpler than it seems`
+        ];
+
+        // Update title if needed with variation
+        if (!result.title || result.title.trim() === '') {
+            // Add variation based on uniqueness marker
+            if (uniqueMarker) {
+                const variationIndex = variationSeed % titleVariations.length;
+                result.title = titleVariations[variationIndex];
+            } else {
+                result.title = `${quizTypeName} Quiz`;
+            }
+        } else {
+            // Remove any quotation marks from existing titles
+            result.title = result.title.replace(/["']/g, '');
+        }
+
+        // Subtitle variations
+        const subtitleVariations = [
+            `Test your ${difficulty} level ${quizTypeName} skills`,
+            `Challenge yourself with this ${difficulty} ${quizTypeName}`,
+            `A ${difficulty} ${quizTypeName} for puzzle enthusiasts`,
+            `Try to solve this ${difficulty} ${quizTypeName} challenge`,
+            `How fast can you solve this ${difficulty} ${quizTypeName}?`
+        ];
+
+
+        // Ensure subtitle is present with variation
+        if (!result.subtitle || result.subtitle.trim() === '') {
+            if (uniqueMarker) {
+                const subtitleIndex = (variationSeed + 1) % subtitleVariations.length;
+                result.subtitle = subtitleVariations[subtitleIndex];
+            } else {
+                result.subtitle = subtitleVariations[0];
+            }
+        } else {
+            // Remove any quotation marks from existing subtitles
+            result.subtitle = result.subtitle.replace(/["']/g, '');
+        }
+
+        // Ensure branding text is present
+        if (!result.brandingText || result.brandingText.trim() === '') {
+            result.brandingText = `${quizTypeName} Quiz by FB Quiz`;
+        }
+
+        // Ensure hint is present with variation
+        if (!result.hint || result.hint.trim() === '') {
+            if (uniqueMarker) {
+                const hintIndex = (variationSeed + 2) % hintVariations.length;
+                result.hint = hintVariations[hintIndex];
+            } else {
+                result.hint = hintVariations[0];
+            }
+        }
+
+        // Ensure solution includes context
+        if (!result.solution || result.solution.trim() === '') {
+            result.solution = `This is a ${difficulty} level ${quizTypeName} quiz`;
+        }
+
+        return result;
+    }
+
+    /**
+     * Get a user-friendly name for the quiz type
+     */
+    private getQuizTypeName(quizType: QuizType): string {
+        switch (quizType) {
+            case QuizType.WORDLE:
+                return 'Word Puzzle';
+            case QuizType.NUMBER_SEQUENCE:
+                return 'Number Sequence';
+            case QuizType.RHYME_TIME:
+                return 'Rhyme Time';
+            case QuizType.CONCEPT_CONNECTION:
+                return 'Concept Connection';
+            default:
+                return 'Quiz';
+        }
+    }
+
+    /**
+     * Creates enhanced content incorporating difficulty
+     */
+    private async createEnhancedContent(difficulty: string, quizType: QuizType = QuizType.WORDLE): Promise<string> {
+        // Add difficulty context for better AI understanding
+        let difficultyContext = '';
+
+        switch (difficulty) {
+            case 'easy':
+                difficultyContext = 'simple and straightforward';
+                break;
+            case 'medium':
+                difficultyContext = 'moderately challenging';
+                break;
+            case 'hard':
+                difficultyContext = 'complex and difficult';
+                break;
+            case 'progressive':
+                difficultyContext = 'gradually increasing in difficulty';
+                break;
+            default:
+                difficultyContext = 'moderately challenging';
+        }
+
+        // Create quiz type specific content
+        switch (quizType) {
+            case QuizType.NUMBER_SEQUENCE:
+                // For NUMBER_SEQUENCE quizzes, we generate actual numeric sequences
+                const sequence = await this.generateNumberSequence(difficulty);
+                return sequence.join(', ');
+
+            case QuizType.RHYME_TIME:
+                // For RHYME_TIME, generate rhyming word pairs and track usage
+                const rhymePair = await this.generateRhymePairs(difficulty);
+                return rhymePair.join(', ');
+
+            case QuizType.CONCEPT_CONNECTION:
+                // For CONCEPT_CONNECTION, generate concept sets and track usage
+                const { concepts, theme } = await this.generateConceptSet(difficulty);
+                // Return a string that includes both concepts and theme
+                return `${concepts.join(', ')} - THEME: ${theme}`;
+
+            case QuizType.WORDLE:
+            default:
+                // Create a general prompt that will help the AI generate appropriate content
+                return `Create a ${difficultyContext} quiz. The quiz should be engaging for users.`;
+        }
+    }
+
+    /**
+     * Generates a numeric sequence based on difficulty
+     * Also tracks sequence usage in ContentUsage
+     */
+    private async generateNumberSequence(difficulty: string): Promise<number[]> {
+        // Define available sequences with their patterns
+        const sequenceOptions = {
+            easy: [
+                { sequence: [2, 4, 6, 8, 10], pattern: '+2' },
+                { sequence: [5, 10, 15, 20, 25], pattern: '+5' },
+                { sequence: [1, 3, 5, 7, 9], pattern: '+2' }
+            ],
+            medium: [
+                { sequence: [3, 6, 9, 12, 15], pattern: '+3' },
+                { sequence: [1, 4, 9, 16, 25], pattern: 'squares' },
+                { sequence: [2, 6, 12, 20, 30], pattern: 'increasing differences' }
+            ],
+            hard: [
+                { sequence: [2, 4, 8, 16, 32], pattern: '×2' },
+                { sequence: [3, 4, 7, 11, 18], pattern: 'Fibonacci-like' },
+                { sequence: [1, 3, 6, 10, 15], pattern: 'triangular numbers' }
+            ],
+            default: [
+                { sequence: [1, 2, 3, 4, 5], pattern: '+1' }
+            ]
+        };
+
+        // Get the appropriate options based on difficulty
+        const options = sequenceOptions[difficulty as keyof typeof sequenceOptions] || sequenceOptions.default;
+
+        // Select a random sequence from the options
+        const selectedOption = options[Math.floor(Math.random() * options.length)];
+        const selectedSequence = selectedOption.sequence;
+        const pattern = selectedOption.pattern;
+
+        // Try to track this sequence in ContentUsage
+        try {
+            const { db } = await import('@/lib/db');
+            const { auth } = await import('@/lib/auth');
+            const session = await auth();
+
+            if (session?.user?.id) {
+                // Create a string representation of the sequence for storage
+                const sequenceString = selectedSequence.join(',');
+
+                // Add to ContentUsage
+                await db.contentUsage.upsert({
+                    where: {
+                        userId_contentType_value_format: {
+                            userId: session.user.id,
+                            contentType: 'SEQUENCE',
+                            value: sequenceString,
+                            format: difficulty
+                        }
+                    },
+                    update: {
+                        isUsed: true,
+                        usedAt: new Date(),
+                        metadata: { pattern, nextNumber: selectedSequence[selectedSequence.length - 1] + parseInt(pattern.startsWith('+') ? pattern.substring(1) : '1') }
+                    },
+                    create: {
+                        id: uuidv4(), // Add UUID for id field
+                        userId: session.user.id,
+                        contentType: 'SEQUENCE',
+                        value: sequenceString,
+                        format: difficulty,
+                        isUsed: true,
+                        metadata: { pattern, nextNumber: selectedSequence[selectedSequence.length - 1] + parseInt(pattern.startsWith('+') ? pattern.substring(1) : '1') }
+                    }
+                });
+
+                console.log(`✅ SmartGeneratorAdapter: Added number sequence ${sequenceString} to ContentUsage`);
+            }
+        } catch (error) {
+            console.error(`❌ SmartGeneratorAdapter: Error adding sequence to ContentUsage:`, error);
+            // Don't fail sequence generation if tracking fails
+        }
+
+        return selectedSequence;
+    }
+
+    /**
+     * Creates a fallback quiz result when the generation service fails
+     */
+    private async createFallbackQuizResult(
+        quizType: QuizType,
+        content: string,
+        difficulty: string,
+        language: Language
+    ): Promise<CompleteQuizGenerationResult> {
+        console.log(`📊 SmartGeneratorAdapter: Creating fallback quiz content in ${language} language`);
+
+        if (quizType === QuizType.WORDLE) {
+            // Fallback for word puzzles
+            // Generate a simple word based on difficulty
+            const word = await this.getWordFromDictionary(language, this.getWordLengthBasedOnDifficulty(difficulty), difficulty);
+
+            if (!word) {
+                console.warn('⚠️ SmartGeneratorAdapter: Could not get word from dictionary, falling back to simple content');
+                content = 'QUIZ';
+            }
+
+            // Generate WORDLE grid HTML
+            const wordGrid = this.generateBasicWordGrid(word);
+
+            // Generate localized solution text
+            let solution = '';
+            switch (language) {
+                case 'fr':
+                    solution = `La réponse est ${word}. C'est un puzzle de mots de niveau ${difficulty === 'easy' ? 'facile' : difficulty === 'medium' ? 'moyen' : 'difficile'}.`;
+                    break;
+                case 'es':
+                    solution = `La respuesta es ${word}. Este es un rompecabezas de palabras de nivel ${difficulty === 'easy' ? 'fácil' : difficulty === 'medium' ? 'medio' : 'difícil'}.`;
+                    break;
+                case 'de':
+                    solution = `Die Antwort ist ${word}. Dies ist ein Worträtsel der Stufe ${difficulty === 'easy' ? 'einfach' : difficulty === 'medium' ? 'mittel' : 'schwierig'}.`;
+                    break;
+                case 'it':
+                    solution = `La risposta è ${word}. Questo è un puzzle di parole di livello ${difficulty === 'easy' ? 'facile' : difficulty === 'medium' ? 'medio' : 'difficile'}.`;
+                    break;
+                case 'pt':
+                    solution = `A resposta é ${word}. Este é um quebra-cabeça de palavras de nível ${difficulty === 'easy' ? 'fácil' : difficulty === 'medium' ? 'médio' : 'difícil'}.`;
+                    break;
+                case 'nl':
+                    solution = `Het antwoord is ${word}. Dit is een woordpuzzel van ${difficulty === 'easy' ? 'gemakkelijk' : difficulty === 'medium' ? 'gemiddeld' : 'moeilijk'} niveau.`;
+                    break;
+                default: // English
+                    solution = `The answer is ${word}. This is a ${difficulty} level word puzzle.`;
+            }
+
+            return {
+                title: this.getLocalizedTitle(quizType, language),
+                subtitle: this.getLocalizedSubtitle(quizType, language, difficulty),
+                brandingText: this.getLocalizedBrandingText(quizType, language),
+                hint: this.getLocalizedHint(quizType, language),
+                answer: word || '',
+                solution,
+                variables: {
+                    wordGrid: wordGrid
+                }
+            };
+        } else if (quizType === QuizType.NUMBER_SEQUENCE) {
+            // Fallback for number sequence quizzes
+            // Generate a simple sequence based on difficulty
+            const sequence = await this.generateNumberSequence(difficulty);
+
+            // Calculate the next number based on the pattern
+            let nextNumber: number;
+            let patternDescription: string;
+
+            // Determine the pattern based on the sequence
+            if (sequence[1] - sequence[0] === sequence[2] - sequence[1]) {
+                // Arithmetic sequence (addition)
+                const diff = sequence[1] - sequence[0];
+                nextNumber = sequence[sequence.length - 1] + diff;
+                patternDescription = `where each number increases by ${diff}`;
+            } else if (sequence[1] / sequence[0] === sequence[2] / sequence[1] && Number.isInteger(sequence[1] / sequence[0])) {
+                // Geometric sequence (multiplication)
+                const ratio = sequence[1] / sequence[0];
+                nextNumber = sequence[sequence.length - 1] * ratio;
+                patternDescription = `where each number is multiplied by ${ratio}`;
+            } else if (sequence[0] === 1 && sequence[1] === 3 && sequence[2] === 6) {
+                // Triangular numbers
+                nextNumber = (sequence.length + 1) * (sequence.length + 2) / 2;
+                patternDescription = "of triangular numbers";
+            } else if (sequence[0] === 1 && sequence[1] === 4 && sequence[2] === 9) {
+                // Square numbers
+                nextNumber = Math.pow(sequence.length + 1, 2);
+                patternDescription = "of square numbers";
+            } else if (sequence[2] === sequence[0] + sequence[1] && sequence[3] === sequence[1] + sequence[2]) {
+                // Fibonacci-like
+                nextNumber = sequence[sequence.length - 1] + sequence[sequence.length - 2];
+                patternDescription = "where each number is the sum of the two previous numbers";
+            } else {
+                // Default to simple addition
+                const diff = sequence[1] - sequence[0];
+                nextNumber = sequence[sequence.length - 1] + diff;
+                patternDescription = `where each number increases by ${diff}`;
+            }
+
+            const answer = nextNumber.toString();
+
+            // Create sequence HTML for the template
+            const sequenceHtml = sequence.map(num => `<div class="number-box">${num}</div>`).join('') +
+                '<div class="number-box missing">?</div>';
+
+            // Generate localized solution text
+            let solution = '';
+            switch (language) {
+                case 'fr':
+                    solution = `La réponse est ${answer}. Cette séquence suit un modèle ${patternDescription === 'where each number increases by 1' ? 'où chaque nombre augmente de 1' :
+                        patternDescription === 'where each number is multiplied by 2' ? 'où chaque nombre est multiplié par 2' :
+                            patternDescription === 'of triangular numbers' ? 'de nombres triangulaires' :
+                                patternDescription === 'of square numbers' ? 'de nombres carrés' :
+                                    patternDescription === 'where each number is the sum of the two previous numbers' ? 'où chaque nombre est la somme des deux nombres précédents' :
+                                        'mathématique'}.`;
+                    break;
+                case 'es':
+                    solution = `La respuesta es ${answer}. Esta secuencia sigue un patrón ${patternDescription === 'where each number increases by 1' ? 'donde cada número aumenta en 1' :
+                        patternDescription === 'where each number is multiplied by 2' ? 'donde cada número se multiplica por 2' :
+                            patternDescription === 'of triangular numbers' ? 'de números triangulares' :
+                                patternDescription === 'of square numbers' ? 'de números cuadrados' :
+                                    patternDescription === 'where each number is the sum of the two previous numbers' ? 'donde cada número es la suma de los dos números anteriores' :
+                                        'matemático'}.`;
+                    break;
+                case 'de':
+                    solution = `Die Antwort ist ${answer}. Diese Sequenz folgt einem Muster ${patternDescription === 'where each number increases by 1' ? 'bei dem jede Zahl um 1 zunimmt' :
+                        patternDescription === 'where each number is multiplied by 2' ? 'bei dem jede Zahl mit 2 multipliziert wird' :
+                            patternDescription === 'of triangular numbers' ? 'von Dreieckszahlen' :
+                                patternDescription === 'of square numbers' ? 'von Quadratzahlen' :
+                                    patternDescription === 'where each number is the sum of the two previous numbers' ? 'bei dem jede Zahl die Summe der beiden vorherigen Zahlen ist' :
+                                        'mathematisch'}.`;
+                    break;
+                default: // English and other languages
+                    solution = `The answer is ${answer}. This sequence follows a pattern ${patternDescription}.`;
+            }
+
+            return {
+                title: this.getLocalizedTitle(quizType, language),
+                subtitle: this.getLocalizedSubtitle(quizType, language, difficulty),
+                brandingText: this.getLocalizedBrandingText(quizType, language),
+                hint: this.getLocalizedHint(quizType, language),
+                answer: answer,
+                solution,
+                variables: {
+                    sequence: sequenceHtml
+                }
+            };
+        } else if (quizType === QuizType.RHYME_TIME) {
+            // Fallback for rhyme time quizzes - use the same function we're using for regular generation
+            try {
+                // Use our new rhyme pair generator with tracking
+                const rhymePair = await this.generateRhymePairs(difficulty);
+
+                // Decide which word to show and which to hide
+                const showFirstWord = Math.random() > 0.5;
+                const firstWord = rhymePair[0];
+                const secondWord = rhymePair[1];
+
+                // Create HTML for the rhyme grid
+                const rhymeGridHtml = `<div class="rhyme-grid">
+                    <div class="rhyme-pair">
+                        <div class="rhyme-word">${showFirstWord ? firstWord : '?'}</div>
+                        <div class="rhyme-plus">+</div>
+                        <div class="rhyme-word">${showFirstWord ? '?' : secondWord}</div>
+                    </div>
+                </div>`;
+
+                // Generate localized solution text
+                let solution = '';
+                switch (language) {
+                    case 'fr':
+                        solution = `La réponse est ${showFirstWord ? secondWord : firstWord}. Il rime avec ${showFirstWord ? firstWord : secondWord}.`;
+                        break;
+                    case 'es':
+                        solution = `La respuesta es ${showFirstWord ? secondWord : firstWord}. Rima con ${showFirstWord ? firstWord : secondWord}.`;
+                        break;
+                    case 'de':
+                        solution = `Die Antwort ist ${showFirstWord ? secondWord : firstWord}. Es reimt sich auf ${showFirstWord ? firstWord : secondWord}.`;
+                        break;
+                    case 'it':
+                        solution = `La risposta è ${showFirstWord ? secondWord : firstWord}. Fa rima con ${showFirstWord ? firstWord : secondWord}.`;
+                        break;
+                    case 'pt':
+                        solution = `A resposta é ${showFirstWord ? secondWord : firstWord}. Rima com ${showFirstWord ? firstWord : secondWord}.`;
+                        break;
+                    case 'nl':
+                        solution = `Het antwoord is ${showFirstWord ? secondWord : firstWord}. Het rijmt op ${showFirstWord ? firstWord : secondWord}.`;
+                        break;
+                    default: // English
+                        solution = `The answer is ${showFirstWord ? secondWord : firstWord}. It rhymes with ${showFirstWord ? firstWord : secondWord}.`;
+                }
+
+                return {
+                    title: this.getLocalizedTitle(quizType, language),
+                    subtitle: this.getLocalizedSubtitle(quizType, language, difficulty),
+                    brandingText: this.getLocalizedBrandingText(quizType, language),
+                    hint: this.getLocalizedHint(quizType, language),
+                    answer: showFirstWord ? secondWord : firstWord,
+                    solution,
+                    variables: {
+                        rhymeGrid: rhymeGridHtml
+                    }
+                };
+            } catch (error) {
+                console.error('Error using rhyme generator, falling back to hardcoded pairs:', error);
+
+                // Original hardcoded fallback if the generator fails
+                const rhymingPairs: Record<Language, string[][]> = {
+                    'en': [['CAKE', 'BAKE'], ['HAIR', 'BEAR'], ['BLUE', 'TRUE']],
+                    'fr': [['CHAT', 'PLAT'], ['MAIN', 'PAIN'], ['JOUR', 'TOUR']],
+                    'es': [['MESA', 'PESA'], ['CASA', 'PASA'], ['SOL', 'COL']],
+                    'de': [['HAUS', 'MAUS'], ['BUCH', 'TUCH'], ['HAND', 'WAND']],
+                    'it': [['CANE', 'PANE'], ['VITA', 'DITA'], ['SOLE', 'MOLE']],
+                    'pt': [['CASA', 'ASSA'], ['DOR', 'COR'], ['PELO', 'GELO']],
+                    'nl': [['HUIS', 'MUIS'], ['BOEK', 'DOEK'], ['HAND', 'LAND']]
+                };
+
+                // Select rhyming pair based on language and difficulty
+                const pairs = rhymingPairs[language] || rhymingPairs['en'];
+                const index = Math.min(
+                    Math.floor(difficulty === 'hard' ? 2 : (difficulty === 'medium' ? 1 : 0)),
+                    pairs.length - 1
+                );
+                const [firstWord, secondWord] = pairs[index];
+                const showFirstWord = Math.random() > 0.5;
+
+                // Create HTML for the rhyme grid
+                const rhymeGridHtml = `<div class="rhyme-grid">
+                    <div class="rhyme-pair">
+                        <div class="rhyme-word">${showFirstWord ? firstWord : '?'}</div>
+                        <div class="rhyme-plus">+</div>
+                        <div class="rhyme-word">${showFirstWord ? '?' : secondWord}</div>
+                    </div>
+                </div>`;
+
+                // Generate localized solution text
+                let solution = '';
+                switch (language) {
+                    case 'fr':
+                        solution = `La réponse est ${showFirstWord ? secondWord : firstWord}. Il rime avec ${showFirstWord ? firstWord : secondWord}.`;
+                        break;
+                    case 'es':
+                        solution = `La respuesta es ${showFirstWord ? secondWord : firstWord}. Rima con ${showFirstWord ? firstWord : secondWord}.`;
+                        break;
+                    case 'de':
+                        solution = `Die Antwort ist ${showFirstWord ? secondWord : firstWord}. Es reimt sich auf ${showFirstWord ? firstWord : secondWord}.`;
+                        break;
+                    case 'it':
+                        solution = `La risposta è ${showFirstWord ? secondWord : firstWord}. Fa rima con ${showFirstWord ? firstWord : secondWord}.`;
+                        break;
+                    case 'pt':
+                        solution = `A resposta é ${showFirstWord ? secondWord : firstWord}. Rima com ${showFirstWord ? firstWord : secondWord}.`;
+                        break;
+                    case 'nl':
+                        solution = `Het antwoord is ${showFirstWord ? secondWord : firstWord}. Het rijmt op ${showFirstWord ? firstWord : secondWord}.`;
+                        break;
+                    default: // English
+                        solution = `The answer is ${showFirstWord ? secondWord : firstWord}. It rhymes with ${showFirstWord ? firstWord : secondWord}.`;
+                }
+
+                return {
+                    title: this.getLocalizedTitle(quizType, language),
+                    subtitle: this.getLocalizedSubtitle(quizType, language, difficulty),
+                    brandingText: this.getLocalizedBrandingText(quizType, language),
+                    hint: this.getLocalizedHint(quizType, language),
+                    answer: showFirstWord ? secondWord : firstWord,
+                    solution,
+                    variables: {
+                        rhymeGrid: rhymeGridHtml
+                    }
+                };
+            }
+        } else if (quizType === QuizType.CONCEPT_CONNECTION) {
+            // Fallback for concept connection quizzes - use the same function we're using for regular generation
+            try {
+                // Use our new concept set generator with tracking
+                const { concepts, theme } = await this.generateConceptSet(difficulty, language);
+
+                // Create HTML for the template
+                const conceptsGridHtml = concepts.map(concept =>
+                    `<div class="concept-card"><span class="concept-text">${concept}</span></div>`
+                ).join('');
+
+                // Generate localized solution text
+                let solution = '';
+                switch (language) {
+                    case 'fr':
+                        solution = `Le thème commun est ${theme}. Tous ces éléments sont des types de ${theme.toLowerCase()}.`;
+                        break;
+                    case 'es':
+                        solution = `El tema de conexión es ${theme}. Todos estos elementos son tipos de ${theme.toLowerCase()}.`;
+                        break;
+                    case 'de':
+                        solution = `Das verbindende Thema ist ${theme}. All diese Elemente sind Arten von ${theme.toLowerCase()}.`;
+                        break;
+                    case 'it':
+                        solution = `Il tema di collegamento è ${theme}. Tutti questi elementi sono tipi di ${theme.toLowerCase()}.`;
+                        break;
+                    case 'pt':
+                        solution = `O tema de conexão é ${theme}. Todos estes elementos são tipos de ${theme.toLowerCase()}.`;
+                        break;
+                    case 'nl':
+                        solution = `Het verbindende thema is ${theme}. Al deze items zijn soorten ${theme.toLowerCase()}.`;
+                        break;
+                    default: // English
+                        solution = `The connecting theme is ${theme}. All of these items are types of ${theme.toLowerCase()}.`;
+                }
+
+                return {
+                    title: this.getLocalizedTitle(quizType, language),
+                    subtitle: this.getLocalizedSubtitle(quizType, language, difficulty),
+                    brandingText: this.getLocalizedBrandingText(quizType, language),
+                    hint: this.getLocalizedHint(quizType, language),
+                    answer: theme,
+                    solution,
+                    variables: {
+                        conceptsGrid: conceptsGridHtml
+                    }
+                };
+            } catch (error) {
+                console.error('Error using concept generator, falling back to hardcoded sets:', error);
+
+                // Original hardcoded fallback if the generator fails
+                const conceptSets: Record<Language, Array<[string[], string]>> = {
+                    'en': [
+                        [['APPLE', 'BANANA', 'ORANGE', 'GRAPE'], 'FRUITS'],
+                        [['DOG', 'CAT', 'BIRD', 'FISH'], 'PETS'],
+                        [['RED', 'BLUE', 'GREEN', 'YELLOW'], 'COLORS']
+                    ],
+                    'fr': [
+                        [['POMME', 'BANANE', 'ORANGE', 'RAISIN'], 'FRUITS'],
+                        [['CHIEN', 'CHAT', 'OISEAU', 'POISSON'], 'ANIMAUX'],
+                        [['ROUGE', 'BLEU', 'VERT', 'JAUNE'], 'COULEURS']
+                    ],
+                    'es': [
+                        [['MANZANA', 'PLÁTANO', 'NARANJA', 'UVA'], 'FRUTAS'],
+                        [['PERRO', 'GATO', 'PÁJARO', 'PEZ'], 'MASCOTAS'],
+                        [['ROJO', 'AZUL', 'VERDE', 'AMARILLO'], 'COLORES']
+                    ],
+                    'de': [
+                        [['APFEL', 'BANANE', 'ORANGE', 'TRAUBE'], 'OBST'],
+                        [['HUND', 'KATZE', 'VOGEL', 'FISCH'], 'HAUSTIERE'],
+                        [['ROT', 'BLAU', 'GRÜN', 'GELB'], 'FARBEN']
+                    ],
+                    'it': [
+                        [['MELA', 'BANANA', 'ARANCIA', 'UVA'], 'FRUTTA'],
+                        [['CANE', 'GATTO', 'UCCELLO', 'PESCE'], 'ANIMALI'],
+                        [['ROSSO', 'BLU', 'VERDE', 'GIALLO'], 'COLORI']
+                    ],
+                    'pt': [
+                        [['MAÇÃ', 'BANANA', 'LARANJA', 'UVA'], 'FRUTAS'],
+                        [['CÃO', 'GATO', 'PÁSSARO', 'PEIXE'], 'ANIMAIS'],
+                        [['VERMELHO', 'AZUL', 'VERDE', 'AMARELO'], 'CORES']
+                    ],
+                    'nl': [
+                        [['APPEL', 'BANAAN', 'SINAASAPPEL', 'DRUIF'], 'FRUIT'],
+                        [['HOND', 'KAT', 'VOGEL', 'VIS'], 'HUISDIEREN'],
+                        [['ROOD', 'BLAUW', 'GROEN', 'GEEL'], 'KLEUREN']
+                    ]
+                };
+
+                // Select concept set based on difficulty
+                const sets = conceptSets[language] || conceptSets['en'];
+                const index = Math.min(Math.floor(difficulty === 'hard' ? 2 : (difficulty === 'medium' ? 1 : 0)), sets.length - 1);
+                const [concepts, theme] = sets[index];
+
+                // Create HTML for the template
+                const conceptsGridHtml = concepts.map(concept =>
+                    `<div class="concept-card"><span class="concept-text">${concept}</span></div>`
+                ).join('');
+
+                // Generate localized solution text
+                let solution = '';
+                switch (language) {
+                    case 'fr':
+                        solution = `Le thème commun est ${theme}. Tous ces éléments sont des types de ${theme.toLowerCase()}.`;
+                        break;
+                    case 'es':
+                        solution = `El tema de conexión es ${theme}. Todos estos elementos son tipos de ${theme.toLowerCase()}.`;
+                        break;
+                    case 'de':
+                        solution = `Das verbindende Thema ist ${theme}. All diese Elemente sind Arten von ${theme.toLowerCase()}.`;
+                        break;
+                    case 'it':
+                        solution = `Il tema di collegamento è ${theme}. Tutti questi elementi sono tipi di ${theme.toLowerCase()}.`;
+                        break;
+                    case 'pt':
+                        solution = `O tema de conexão é ${theme}. Todos estes elementos são tipos de ${theme.toLowerCase()}.`;
+                        break;
+                    case 'nl':
+                        solution = `Het verbindende thema is ${theme}. Al deze items zijn soorten ${theme.toLowerCase()}.`;
+                        break;
+                    default: // English
+                        solution = `The connecting theme is ${theme}. All of these items are types of ${theme.toLowerCase()}.`;
+                }
+
+                return {
+                    title: this.getLocalizedTitle(quizType, language),
+                    subtitle: this.getLocalizedSubtitle(quizType, language, difficulty),
+                    brandingText: this.getLocalizedBrandingText(quizType, language),
+                    hint: this.getLocalizedHint(quizType, language),
+                    answer: theme,
+                    solution,
+                    variables: {
+                        conceptsGrid: conceptsGridHtml
+                    }
+                };
+            }
+        } else {
+            // Generic fallback for other quiz types
+            return {
+                title: this.getLocalizedTitle(quizType, language),
+                subtitle: this.getLocalizedSubtitle(quizType, language, difficulty),
+                brandingText: this.getLocalizedBrandingText(quizType, language),
+                hint: this.getLocalizedHint(quizType, language),
+                answer: content,
+                solution: `The answer is ${content}.`,
+                variables: {
+                    content
+                }
+            };
+        }
+    }
+
+    /**
+     * Generate a basic WORDLE grid for fallback content
+     */
+    private generateBasicWordGrid(word: string | null): string {
+        if (!word) {
+            return `<div class="word-grid-container">
+                <div class="word-attempt">
+                    <div class="word-grid-row">
+                        <div class="letter-box">Q</div>
+                        <div class="letter-box">U</div>
+                        <div class="letter-box">I</div>
+                        <div class="letter-box">Z</div>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        return `<div class="word-grid-container">
+            <div class="word-attempt">
+                <div class="word-grid-row">
+                    ${word.split('').map(letter =>
+            `<div class="letter-box">${letter}</div>`).join('')}
+                </div>
+            </div>
+        </div>`;
+    }
+
+    /**
+     * Get a description of the sequence rule
+     */
+    private getFallbackSequenceRule(difficulty: string): string {
+        switch (difficulty) {
+            case 'easy':
+                return "Add 2 to each number";
+            case 'medium':
+                return "Add 3 to each number";
+            case 'hard':
+                return "Multiply each number by 2";
+            default:
+                return "Add 1 to each number";
+        }
+    }
+
+    /**
+     * Generates rhyming word pairs for RHYME_TIME quizzes
+     * Also tracks rhyme usage in ContentUsage
+     * @param difficulty Difficulty level of the generated pairs
+     * @returns Array containing a rhyming word pair
+     */
+    private async generateRhymePairs(difficulty: string): Promise<string[]> {
+        // Define available rhyme pairs with their difficulty
+        const rhymeOptions = {
+            easy: [
+                { pair: ['CAT', 'HAT'], pattern: 'short vowel' },
+                { pair: ['DOG', 'FOG'], pattern: 'short vowel' },
+                { pair: ['CAKE', 'LAKE'], pattern: 'long vowel' }
+            ],
+            medium: [
+                { pair: ['FLIGHT', 'NIGHT'], pattern: 'consonant blend' },
+                { pair: ['DREAM', 'STREAM'], pattern: 'consonant blend' },
+                { pair: ['CHANCE', 'DANCE'], pattern: 'vowel-consonant' }
+            ],
+            hard: [
+                { pair: ['SOUGHT', 'THOUGHT'], pattern: 'irregular spelling' },
+                { pair: ['COUGH', 'ROUGH'], pattern: 'irregular spelling' },
+                { pair: ['WEIGH', 'PREY'], pattern: 'diphthong' }
+            ],
+            default: [
+                { pair: ['BLUE', 'TRUE'], pattern: 'long vowel' }
+            ]
+        };
+
+        // Get the appropriate options based on difficulty
+        const options = rhymeOptions[difficulty as keyof typeof rhymeOptions] || rhymeOptions.default;
+
+        // Select a random pair from the options
+        const selectedOption = options[Math.floor(Math.random() * options.length)];
+        const selectedPair = selectedOption.pair;
+        const pattern = selectedOption.pattern;
+
+        // Try to track this rhyme pair in ContentUsage
+        try {
+            const { db } = await import('@/lib/db');
+            const { auth } = await import('@/lib/auth');
+            const session = await auth();
+
+            if (session?.user?.id) {
+                // Create a string representation of the rhyme pair for storage
+                const rhymeString = selectedPair.join(':');
+
+                // Add to ContentUsage
+                await db.contentUsage.upsert({
+                    where: {
+                        userId_contentType_value_format: {
+                            userId: session.user.id,
+                            contentType: 'RHYME',
+                            value: rhymeString,
+                            format: difficulty
+                        }
+                    },
+                    update: {
+                        isUsed: true,
+                        usedAt: new Date(),
+                        metadata: {
+                            pattern,
+                            firstWord: selectedPair[0],
+                            secondWord: selectedPair[1]
+                        }
+                    },
+                    create: {
+                        id: uuidv4(), // Add UUID for id field
+                        userId: session.user.id,
+                        contentType: 'RHYME',
+                        value: rhymeString,
+                        format: difficulty,
+                        isUsed: true,
+                        metadata: {
+                            pattern,
+                            firstWord: selectedPair[0],
+                            secondWord: selectedPair[1]
+                        }
+                    }
+                });
+
+                console.log(`✅ SmartGeneratorAdapter: Added rhyme pair ${rhymeString} to ContentUsage`);
+            }
+        } catch (error) {
+            console.error(`❌ SmartGeneratorAdapter: Error adding rhyme pair to ContentUsage:`, error);
+            // Don't fail rhyme generation if tracking fails
+        }
+
+        return selectedPair;
+    }
+
+    /**
+     * Generates concepts for CONCEPT_CONNECTION quizzes
+     * Also tracks concept usage in ContentUsage
+     * @param difficulty Difficulty level
+     * @param language Language for the concepts
+     * @returns Array of related concepts and their theme
+     */
+    private async generateConceptSet(difficulty: string, language: Language = 'en'): Promise<{ concepts: string[], theme: string }> {
+        // Define available concept sets with their themes
+        const conceptSets: Record<Language, Record<string, Array<{ concepts: string[], theme: string }>>> = {
+            'en': {
+                easy: [
+                    { concepts: ['APPLE', 'BANANA', 'ORANGE', 'GRAPE'], theme: 'FRUITS' },
+                    { concepts: ['DOG', 'CAT', 'BIRD', 'FISH'], theme: 'PETS' },
+                    { concepts: ['RED', 'BLUE', 'GREEN', 'YELLOW'], theme: 'COLORS' }
+                ],
+                medium: [
+                    { concepts: ['PARIS', 'ROME', 'LONDON', 'BERLIN'], theme: 'EUROPEAN CAPITALS' },
+                    { concepts: ['TENNIS', 'GOLF', 'SOCCER', 'BASKETBALL'], theme: 'SPORTS' },
+                    { concepts: ['SPRING', 'SUMMER', 'AUTUMN', 'WINTER'], theme: 'SEASONS' }
+                ],
+                hard: [
+                    { concepts: ['RUBY', 'EMERALD', 'SAPPHIRE', 'DIAMOND'], theme: 'GEMSTONES' },
+                    { concepts: ['CALCIUM', 'IRON', 'POTASSIUM', 'ZINC'], theme: 'MINERALS' },
+                    { concepts: ['MOZART', 'BEETHOVEN', 'BACH', 'CHOPIN'], theme: 'CLASSICAL COMPOSERS' }
+                ]
+            },
+            'fr': {
+                easy: [
+                    { concepts: ['POMME', 'BANANE', 'ORANGE', 'RAISIN'], theme: 'FRUITS' },
+                    { concepts: ['CHIEN', 'CHAT', 'OISEAU', 'POISSON'], theme: 'ANIMAUX' },
+                    { concepts: ['ROUGE', 'BLEU', 'VERT', 'JAUNE'], theme: 'COULEURS' }
+                ],
+                medium: [
+                    { concepts: ['PARIS', 'LYON', 'MARSEILLE', 'BORDEAUX'], theme: 'VILLES FRANÇAISES' },
+                    { concepts: ['TENNIS', 'GOLF', 'FOOTBALL', 'BASKETBALL'], theme: 'SPORTS' },
+                    { concepts: ['PRINTEMPS', 'ÉTÉ', 'AUTOMNE', 'HIVER'], theme: 'SAISONS' }
+                ],
+                hard: [
+                    { concepts: ['RUBIS', 'ÉMERAUDE', 'SAPHIR', 'DIAMANT'], theme: 'PIERRES PRÉCIEUSES' },
+                    { concepts: ['CALCIUM', 'FER', 'POTASSIUM', 'ZINC'], theme: 'MINÉRAUX' },
+                    { concepts: ['MOZART', 'BEETHOVEN', 'BACH', 'CHOPIN'], theme: 'COMPOSITEURS CLASSIQUES' }
+                ]
+            },
+            'es': {
+                easy: [
+                    { concepts: ['MANZANA', 'PLÁTANO', 'NARANJA', 'UVA'], theme: 'FRUTAS' },
+                    { concepts: ['PERRO', 'GATO', 'PÁJARO', 'PEZ'], theme: 'MASCOTAS' },
+                    { concepts: ['ROJO', 'AZUL', 'VERDE', 'AMARILLO'], theme: 'COLORES' }
+                ],
+                medium: [],
+                hard: []
+            },
+            'de': {
+                easy: [
+                    { concepts: ['APFEL', 'BANANE', 'ORANGE', 'TRAUBE'], theme: 'OBST' },
+                    { concepts: ['HUND', 'KATZE', 'VOGEL', 'FISCH'], theme: 'HAUSTIERE' },
+                    { concepts: ['ROT', 'BLAU', 'GRÜN', 'GELB'], theme: 'FARBEN' }
+                ],
+                medium: [],
+                hard: []
+            },
+            'it': {
+                easy: [
+                    { concepts: ['MELA', 'BANANA', 'ARANCIA', 'UVA'], theme: 'FRUTTA' },
+                    { concepts: ['CANE', 'GATTO', 'UCCELLO', 'PESCE'], theme: 'ANIMALI' },
+                    { concepts: ['ROSSO', 'BLU', 'VERDE', 'GIALLO'], theme: 'COLORI' }
+                ],
+                medium: [],
+                hard: []
+            },
+            'pt': {
+                easy: [
+                    { concepts: ['MAÇÃ', 'BANANA', 'LARANJA', 'UVA'], theme: 'FRUTAS' },
+                    { concepts: ['CÃO', 'GATO', 'PÁSSARO', 'PEIXE'], theme: 'ANIMAIS' },
+                    { concepts: ['VERMELHO', 'AZUL', 'VERDE', 'AMARELO'], theme: 'CORES' }
+                ],
+                medium: [],
+                hard: []
+            },
+            'nl': {
+                easy: [
+                    { concepts: ['APPEL', 'BANAAN', 'SINAASAPPEL', 'DRUIF'], theme: 'FRUIT' },
+                    { concepts: ['HOND', 'KAT', 'VOGEL', 'VIS'], theme: 'HUISDIEREN' },
+                    { concepts: ['ROOD', 'BLAUW', 'GROEN', 'GEEL'], theme: 'KLEUREN' }
+                ],
+                medium: [],
+                hard: []
+            }
+        };
+
+        // Get the appropriate options based on language and difficulty
+        const langOptions = conceptSets[language] || conceptSets['en'];
+        const difficultyOptions = langOptions[difficulty] || langOptions['easy'] || conceptSets['en']['easy'];
+
+        if (difficultyOptions.length === 0) {
+            // Fallback to English if no options for this language/difficulty
+            return this.generateConceptSet(difficulty, 'en');
+        }
+
+        // Select a random concept set
+        const selectedSet = difficultyOptions[Math.floor(Math.random() * difficultyOptions.length)];
+
+        // Try to track this concept set in ContentUsage
+        try {
+            const { db } = await import('@/lib/db');
+            const { auth } = await import('@/lib/auth');
+            const session = await auth();
+
+            if (session?.user?.id) {
+                // Create a string representation of the concept set
+                const conceptString = selectedSet.concepts.join(':');
+
+                // Add to ContentUsage
+                await db.contentUsage.upsert({
+                    where: {
+                        userId_contentType_value_format: {
+                            userId: session.user.id,
+                            contentType: 'CONCEPT',
+                            value: conceptString,
+                            format: `${language}-${difficulty}`
+                        }
+                    },
+                    update: {
+                        isUsed: true,
+                        usedAt: new Date(),
+                        metadata: {
+                            theme: selectedSet.theme,
+                            language,
+                            conceptCount: selectedSet.concepts.length
+                        }
+                    },
+                    create: {
+                        id: uuidv4(), // Add UUID for id field
+                        userId: session.user.id,
+                        contentType: 'CONCEPT',
+                        value: conceptString,
+                        format: `${language}-${difficulty}`,
+                        isUsed: true,
+                        metadata: {
+                            theme: selectedSet.theme,
+                            language,
+                            conceptCount: selectedSet.concepts.length
+                        }
+                    }
+                });
+
+                console.log(`✅ SmartGeneratorAdapter: Added concept set ${conceptString} to ContentUsage`);
+            }
+        } catch (error) {
+            console.error(`❌ SmartGeneratorAdapter: Error adding concept set to ContentUsage:`, error);
+            // Don't fail concept generation if tracking fails
+        }
+
+        return selectedSet;
+    }
+
+    /**
+     * Get localized quiz title based on quiz type and language
+     * @param quizType Type of quiz
+     * @param language Target language
+     * @returns Localized title
+     */
+    private getLocalizedTitle(quizType: QuizType, language: Language): string {
+        const quizTypeName = this.getQuizTypeName(quizType);
+
+        // Titles by language and quiz type
+        const titles: Record<Language, Record<QuizType, string[]>> = {
+            'en': {
+                'WORDLE': ['Word Guessing Challenge', 'Word Mystery', 'Hidden Word Puzzle'],
+                'NUMBER_SEQUENCE': ['Number Sequence Challenge', 'Number Pattern', 'Mathematical Series'],
+                'RHYME_TIME': ['Rhyming Words Challenge', 'Rhyme Finder', 'Word Rhyme Puzzle'],
+                'CONCEPT_CONNECTION': ['Concept Connection', 'Theme Finder', 'Category Challenge']
+            },
+            'fr': {
+                'WORDLE': ['Défi de Mots Cachés', 'Mystère de Mots', 'Puzzle de Lettres'],
+                'NUMBER_SEQUENCE': ['Suite Logique', 'Séquence Numérique', 'Série Mathématique'],
+                'RHYME_TIME': ['Défi de Rimes', 'Mots qui Riment', 'Jeu de Rimes'],
+                'CONCEPT_CONNECTION': ['Connexion de Concepts', 'Thème Commun', 'Catégories Liées']
+            },
+            'es': {
+                'WORDLE': ['Desafío de Palabras', 'Misterio de Palabras', 'Puzzle de Letras'],
+                'NUMBER_SEQUENCE': ['Secuencia Numérica', 'Patrón de Números', 'Serie Matemática'],
+                'RHYME_TIME': ['Desafío de Rimas', 'Palabras que Riman', 'Juego de Rimas'],
+                'CONCEPT_CONNECTION': ['Conexión de Conceptos', 'Tema Común', 'Categorías Relacionadas']
+            },
+            'de': {
+                'WORDLE': ['Worträtsel', 'Wort-Geheimnis', 'Buchstabenspiel'],
+                'NUMBER_SEQUENCE': ['Zahlenfolge', 'Zahlenmuster', 'Mathematische Reihe'],
+                'RHYME_TIME': ['Reim-Herausforderung', 'Reimwörter', 'Reimspiel'],
+                'CONCEPT_CONNECTION': ['Konzeptverbindung', 'Themensuche', 'Kategorienspiel']
+            },
+            'it': {
+                'WORDLE': ['Sfida di Parole', 'Mistero Verbale', 'Puzzle di Lettere'],
+                'NUMBER_SEQUENCE': ['Sequenza Numerica', 'Schema di Numeri', 'Serie Matematica'],
+                'RHYME_TIME': ['Sfida di Rime', 'Parole in Rima', 'Gioco di Rime'],
+                'CONCEPT_CONNECTION': ['Connessione di Concetti', 'Tema Comune', 'Categorie Correlate']
+            },
+            'pt': {
+                'WORDLE': ['Desafio de Palavras', 'Mistério de Palavras', 'Quebra-cabeça de Letras'],
+                'NUMBER_SEQUENCE': ['Sequência Numérica', 'Padrão de Números', 'Série Matemática'],
+                'RHYME_TIME': ['Desafio de Rimas', 'Palavras que Rimam', 'Jogo de Rimas'],
+                'CONCEPT_CONNECTION': ['Conexão de Conceitos', 'Tema Comum', 'Categorias Relacionadas']
+            },
+            'nl': {
+                'WORDLE': ['Woordraadsel', 'Woordmysterie', 'Letterpuzzel'],
+                'NUMBER_SEQUENCE': ['Getallenreeks', 'Nummerpatroon', 'Wiskundige Serie'],
+                'RHYME_TIME': ['Rijmuitdaging', 'Rijmwoorden', 'Rijmspel'],
+                'CONCEPT_CONNECTION': ['Conceptverbinding', 'Gemeenschappelijk Thema', 'Categorieënspel']
+            }
+        };
+
+        // Get titles for the specified language and quiz type
+        const languageTitles = titles[language]?.[quizType];
+
+        // If no titles exist for this language/quiz type, fall back to English
+        if (!languageTitles || languageTitles.length === 0) {
+            const fallbackTitles = titles['en'][quizType];
+            return fallbackTitles[Math.floor(Math.random() * fallbackTitles.length)];
+        }
+
+        // Return a random title from the available options
+        return languageTitles[Math.floor(Math.random() * languageTitles.length)];
+    }
+
+    /**
+     * Get localized quiz subtitle based on quiz type and language
+     * @param quizType Type of quiz
+     * @param language Target language
+     * @param difficulty Difficulty level
+     * @returns Localized subtitle
+     */
+    private getLocalizedSubtitle(quizType: QuizType, language: Language, difficulty: string): string {
+        const quizTypeName = this.getQuizTypeName(quizType);
+
+        // Map difficulty to localized versions
+        const difficultyTerms: Record<Language, Record<string, string>> = {
+            'en': {
+                'easy': 'easy',
+                'medium': 'medium',
+                'hard': 'difficult',
+                'progressive': 'progressive'
+            },
+            'fr': {
+                'easy': 'facile',
+                'medium': 'moyen',
+                'hard': 'difficile',
+                'progressive': 'progressif'
+            },
+            'es': {
+                'easy': 'fácil',
+                'medium': 'medio',
+                'hard': 'difícil',
+                'progressive': 'progresivo'
+            },
+            'de': {
+                'easy': 'einfach',
+                'medium': 'mittel',
+                'hard': 'schwierig',
+                'progressive': 'progressiv'
+            },
+            'it': {
+                'easy': 'facile',
+                'medium': 'medio',
+                'hard': 'difficile',
+                'progressive': 'progressivo'
+            },
+            'pt': {
+                'easy': 'fácil',
+                'medium': 'médio',
+                'hard': 'difícil',
+                'progressive': 'progressivo'
+            },
+            'nl': {
+                'easy': 'gemakkelijk',
+                'medium': 'gemiddeld',
+                'hard': 'moeilijk',
+                'progressive': 'progressief'
+            }
+        };
+
+        // Get localized difficulty term, falling back to English if needed
+        const difficultyTerm = difficultyTerms[language]?.[difficulty] || difficultyTerms['en'][difficulty] || 'medium';
+
+        // Subtitles by language
+        const subtitles: Record<Language, Record<QuizType, string[]>> = {
+            'en': {
+                'WORDLE': [
+                    `Test your ${difficultyTerm} level word-guessing skills`,
+                    `A ${difficultyTerm} word puzzle for you to solve`,
+                    `Can you guess this ${difficultyTerm} hidden word?`
+                ],
+                'NUMBER_SEQUENCE': [
+                    `Find the next number in this ${difficultyTerm} sequence`,
+                    `A ${difficultyTerm} mathematical pattern challenge`,
+                    `Solve this ${difficultyTerm} number sequence puzzle`
+                ],
+                'RHYME_TIME': [
+                    `Find the rhyming word in this ${difficultyTerm} puzzle`,
+                    `A ${difficultyTerm} rhyming word challenge`,
+                    `Test your ${difficultyTerm} rhyming skills`
+                ],
+                'CONCEPT_CONNECTION': [
+                    `Find what connects these concepts in this ${difficultyTerm} puzzle`,
+                    `Discover the theme in this ${difficultyTerm} challenge`,
+                    `A ${difficultyTerm} category matching puzzle`
+                ]
+            },
+            'fr': {
+                'WORDLE': [
+                    `Testez vos compétences ${difficultyTerm}s en devinant des mots`,
+                    `Un puzzle de mots ${difficultyTerm} à résoudre`,
+                    `Pouvez-vous deviner ce mot caché ${difficultyTerm}?`
+                ],
+                'NUMBER_SEQUENCE': [
+                    `Trouvez le prochain nombre dans cette séquence ${difficultyTerm}`,
+                    `Un défi de motif mathématique ${difficultyTerm}`,
+                    `Résolvez cette énigme de séquence numérique ${difficultyTerm}`
+                ],
+                'RHYME_TIME': [
+                    `Trouvez le mot qui rime dans cette énigme ${difficultyTerm}`,
+                    `Un défi de mots rimants ${difficultyTerm}`,
+                    `Testez vos compétences de rime ${difficultyTerm}s`
+                ],
+                'CONCEPT_CONNECTION': [
+                    `Trouvez ce qui relie ces concepts dans cette énigme ${difficultyTerm}`,
+                    `Découvrez le thème dans ce défi ${difficultyTerm}`,
+                    `Une énigme de correspondance de catégorie ${difficultyTerm}`
+                ]
+            },
+            'es': {
+                'WORDLE': [
+                    `Pon a prueba tus habilidades ${difficultyTerm}s para adivinar palabras`,
+                    `Un rompecabezas de palabras ${difficultyTerm} para resolver`,
+                    `¿Puedes adivinar esta palabra oculta ${difficultyTerm}?`
+                ],
+                'NUMBER_SEQUENCE': [
+                    `Encuentra el siguiente número en esta secuencia ${difficultyTerm}`,
+                    `Un desafío de patrón matemático ${difficultyTerm}`,
+                    `Resuelve este rompecabezas de secuencia numérica ${difficultyTerm}`
+                ],
+                'RHYME_TIME': [
+                    `Encuentra la palabra que rima en este rompecabezas ${difficultyTerm}`,
+                    `Un desafío de palabras que riman ${difficultyTerm}`,
+                    `Pon a prueba tus habilidades ${difficultyTerm}s de rima`
+                ],
+                'CONCEPT_CONNECTION': [
+                    `Encuentra lo que conecta estos conceptos en este rompecabezas ${difficultyTerm}`,
+                    `Descubre el tema en este desafío ${difficultyTerm}`,
+                    `Un rompecabezas ${difficultyTerm} de correspondencia de categorías`
+                ]
+            },
+            'de': {
+                'WORDLE': [
+                    `Teste deine ${difficultyTerm}en Worträtsel-Fähigkeiten`,
+                    `Ein ${difficultyTerm}es Worträtsel zum Lösen`,
+                    `Kannst du dieses ${difficultyTerm}e versteckte Wort erraten?`
+                ],
+                'NUMBER_SEQUENCE': [
+                    `Finde die nächste Zahl in dieser ${difficultyTerm}en Sequenz`,
+                    `Eine ${difficultyTerm}e mathematische Muster-Herausforderung`,
+                    `Löse dieses ${difficultyTerm}e Zahlenfolgen-Puzzle`
+                ],
+                'RHYME_TIME': [
+                    `Finde das Reimwort in diesem ${difficultyTerm}en Rätsel`,
+                    `Eine ${difficultyTerm}e Reim-Herausforderung`,
+                    `Teste deine ${difficultyTerm}en Reim-Fähigkeiten`
+                ],
+                'CONCEPT_CONNECTION': [
+                    `Finde die Verbindung zwischen diesen Konzepten in diesem ${difficultyTerm}en Rätsel`,
+                    `Entdecke das Thema in dieser ${difficultyTerm}en Herausforderung`,
+                    `Ein ${difficultyTerm}es Kategorien-Zuordnungspuzzle`
+                ]
+            },
+            'it': {
+                'WORDLE': [
+                    `Metti alla prova le tue abilità ${difficultyTerm}i di indovinare le parole`,
+                    `Un puzzle di parole ${difficultyTerm} da risolvere`,
+                    `Puoi indovinare questa parola nascosta ${difficultyTerm}?`
+                ],
+                'NUMBER_SEQUENCE': [
+                    `Trova il prossimo numero in questa sequenza ${difficultyTerm}`,
+                    `Una sfida di schema matematico ${difficultyTerm}`,
+                    `Risolvi questo puzzle di sequenza numerica ${difficultyTerm}`
+                ],
+                'RHYME_TIME': [
+                    `Trova la parola che fa rima in questo puzzle ${difficultyTerm}`,
+                    `Una sfida di parole in rima ${difficultyTerm}`,
+                    `Metti alla prova le tue abilità di rima ${difficultyTerm}i`
+                ],
+                'CONCEPT_CONNECTION': [
+                    `Trova ciò che collega questi concetti in questo puzzle ${difficultyTerm}`,
+                    `Scopri il tema in questa sfida ${difficultyTerm}`,
+                    `Un puzzle di abbinamento di categorie ${difficultyTerm}`
+                ]
+            },
+            'pt': {
+                'WORDLE': [
+                    `Teste suas habilidades ${difficultyTerm}s de adivinhar palavras`,
+                    `Um quebra-cabeça de palavras ${difficultyTerm} para resolver`,
+                    `Você consegue adivinhar esta palavra oculta ${difficultyTerm}?`
+                ],
+                'NUMBER_SEQUENCE': [
+                    `Encontre o próximo número nesta sequência ${difficultyTerm}`,
+                    `Um desafio de padrão matemático ${difficultyTerm}`,
+                    `Resolva este quebra-cabeça de sequência numérica ${difficultyTerm}`
+                ],
+                'RHYME_TIME': [
+                    `Encontre a palavra que rima com a palavra dada`,
+                    `Um desafio de palavras que rimam ${difficultyTerm}`,
+                    `Teste suas habilidades ${difficultyTerm}s de rima`
+                ],
+                'CONCEPT_CONNECTION': [
+                    `Encontre o que conecta estes conceitos`,
+                    `Procure o tema ou categoria comum`,
+                    `Que termo mais amplo poderia descrever todos estes elementos?`
+                ]
+            },
+            'nl': {
+                'WORDLE': [
+                    `Test je ${difficultyTerm}e woordraadsel-vaardigheden`,
+                    `Een ${difficultyTerm}e woordpuzzel om op te lossen`,
+                    `Kun je dit ${difficultyTerm}e verborgen woord raden?`
+                ],
+                'NUMBER_SEQUENCE': [
+                    `Vind het volgende getal in deze ${difficultyTerm}e reeks`,
+                    `Een ${difficultyTerm}e wiskundige patroon-uitdaging`,
+                    `Los deze ${difficultyTerm}e getallenreeks-puzzel op`
+                ],
+                'RHYME_TIME': [
+                    `Vind het rijmende woord in deze ${difficultyTerm}e puzzel`,
+                    `Een ${difficultyTerm}e rijmwoorden-uitdaging`,
+                    `Test je ${difficultyTerm}e rijm-vaardigheden`
+                ],
+                'CONCEPT_CONNECTION': [
+                    `Vind wat deze concepten verbindt`,
+                    `Zoek naar het gemeenschappelijke thema of de categorie`,
+                    `Welke bredere term zou al deze items kunnen beschrijven?`
+                ]
+            }
+        };
+
+        // Get subtitles for the specified language and quiz type
+        const languageSubtitles = subtitles[language]?.[quizType];
+
+        // If no subtitles exist for this language/quiz type, fall back to English
+        if (!languageSubtitles || languageSubtitles.length === 0) {
+            const fallbackSubtitles = subtitles['en'][quizType];
+            return fallbackSubtitles[Math.floor(Math.random() * fallbackSubtitles.length)];
+        }
+
+        // Return a random subtitle from the available options
+        return languageSubtitles[Math.floor(Math.random() * languageSubtitles.length)];
+    }
+
+    /**
+     * Get localized hint based on quiz type and language
+     * @param quizType Type of quiz
+     * @param language Target language
+     * @returns Localized hint
+     */
+    private getLocalizedHint(quizType: QuizType, language: Language): string {
+        // Hints by language and quiz type
+        const hints: Record<Language, Record<QuizType, string[]>> = {
+            'en': {
+                'WORDLE': [
+                    'Look for letter patterns and think of common words',
+                    'Pay attention to the position of each letter',
+                    'Try to guess common letters first'
+                ],
+                'NUMBER_SEQUENCE': [
+                    'Look for the pattern in the sequence',
+                    'Think about common mathematical operations',
+                    'Is the sequence increasing by addition, multiplication, or something else?'
+                ],
+                'RHYME_TIME': [
+                    'Find the word that rhymes with the given word',
+                    'Focus on the sound of the word ending',
+                    'Think of words that share the same ending sound'
+                ],
+                'CONCEPT_CONNECTION': [
+                    'Find what connects these concepts',
+                    'Look for the common theme or category',
+                    'What broader term could describe all these items?'
+                ]
+            },
+            'fr': {
+                'WORDLE': [
+                    'Recherchez des motifs de lettres et pensez à des mots courants',
+                    'Faites attention à la position de chaque lettre',
+                    'Essayez de deviner d\'abord les lettres communes'
+                ],
+                'NUMBER_SEQUENCE': [
+                    'Cherchez le modèle dans la séquence',
+                    'Pensez aux opérations mathématiques courantes',
+                    'Est-ce que la séquence augmente par addition, multiplication, ou autre chose?'
+                ],
+                'RHYME_TIME': [
+                    'Trouvez le mot qui rime avec le mot donné',
+                    'Concentrez-vous sur le son de la fin du mot',
+                    'Pensez à des mots qui partagent le même son final'
+                ],
+                'CONCEPT_CONNECTION': [
+                    'Trouvez ce qui relie ces concepts',
+                    'Cherchez le thème ou la catégorie commune',
+                    'Quel terme plus large pourrait décrire tous ces éléments?'
+                ]
+            },
+            'es': {
+                'WORDLE': [
+                    'Busca patrones de letras y piensa en palabras comunes',
+                    'Presta atención a la posición de cada letra',
+                    'Intenta adivinar primero las letras comunes'
+                ],
+                'NUMBER_SEQUENCE': [
+                    'Busca el patrón en la secuencia',
+                    'Piensa en operaciones matemáticas comunes',
+                    '¿La secuencia aumenta por suma, multiplicación u otra cosa?'
+                ],
+                'RHYME_TIME': [
+                    'Encuentra la palabra que rima con la palabra dada',
+                    'Concéntrate en el sonido del final de la palabra',
+                    'Piensa en palabras que comparten el mismo sonido final'
+                ],
+                'CONCEPT_CONNECTION': [
+                    'Encuentra lo que conecta estos conceptos',
+                    'Busca el tema o categoría común',
+                    '¿Qué término más amplio podría describir todos estos elementos?'
+                ]
+            },
+            'de': {
+                'WORDLE': [
+                    'Achte auf Buchstabenmuster und denke an gängige Wörter',
+                    'Achte auf die Position jedes Buchstabens',
+                    'Versuche zuerst, häufige Buchstaben zu erraten'
+                ],
+                'NUMBER_SEQUENCE': [
+                    'Suche nach dem Muster in der Sequenz',
+                    'Denke an gängige mathematische Operationen',
+                    'Steigt die Sequenz durch Addition, Multiplikation oder etwas anderes?'
+                ],
+                'RHYME_TIME': [
+                    'Finde das Wort, das sich auf das gegebene Wort reimt',
+                    'Konzentriere dich auf den Klang des Wortendes',
+                    'Denke an Wörter, die den gleichen Endklang haben'
+                ],
+                'CONCEPT_CONNECTION': [
+                    'Finde, was diese Konzepte verbindet',
+                    'Suche nach dem gemeinsamen Thema oder der Kategorie',
+                    'Welcher umfassendere Begriff könnte all diese Elemente beschreiben?'
+                ]
+            },
+            'it': {
+                'WORDLE': [
+                    'Cerca modelli di lettere e pensa a parole comuni',
+                    'Presta attenzione alla posizione di ogni lettera',
+                    'Prova a indovinare prima le lettere comuni'
+                ],
+                'NUMBER_SEQUENCE': [
+                    'Cerca il modello nella sequenza',
+                    'Pensa alle operazioni matematiche comuni',
+                    'La sequenza aumenta per addizione, moltiplicazione o altro?'
+                ],
+                'RHYME_TIME': [
+                    'Trova la parola che fa rima con la parola data',
+                    'Concentrati sul suono della fine della parola',
+                    'Pensa a parole che condividono lo stesso suono finale'
+                ],
+                'CONCEPT_CONNECTION': [
+                    'Trova ciò che collega questi concetti',
+                    'Cerca il tema o la categoria comune',
+                    'Quale termine più ampio potrebbe descrivere tutti questi elementi?'
+                ]
+            },
+            'pt': {
+                'WORDLE': [
+                    'Procure padrões de letras e pense em palavras comuns',
+                    'Preste atenção à posição de cada letra',
+                    'Tente adivinhar primeiro as letras comuns'
+                ],
+                'NUMBER_SEQUENCE': [
+                    'Procure o padrão na sequência',
+                    'Pense em operações matemáticas comuns',
+                    'A sequência aumenta por adição, multiplicação ou outra coisa?'
+                ],
+                'RHYME_TIME': [
+                    'Encontre a palavra que rima com a palavra dada',
+                    'Concentre-se no som do final da palavra',
+                    'Pense em palavras que compartilham o mesmo som final'
+                ],
+                'CONCEPT_CONNECTION': [
+                    'Encontre o que conecta estes conceitos',
+                    'Procure o tema ou categoria comum',
+                    'Que termo mais amplo poderia descrever todos estes elementos?'
+                ]
+            },
+            'nl': {
+                'WORDLE': [
+                    'Zoek naar letterpatronen en denk aan veelvoorkomende woorden',
+                    'Let op de positie van elke letter',
+                    'Probeer eerst veelvoorkomende letters te raden'
+                ],
+                'NUMBER_SEQUENCE': [
+                    'Zoek naar het patroon in de reeks',
+                    'Denk aan veelvoorkomende wiskundige bewerkingen',
+                    'Stijgt de reeks door optelling, vermenigvuldiging of iets anders?'
+                ],
+                'RHYME_TIME': [
+                    'Vind het woord dat rijmt op het gegeven woord',
+                    'Concentreer je op de klank van het woordeinde',
+                    'Denk aan woorden die dezelfde eindklank delen'
+                ],
+                'CONCEPT_CONNECTION': [
+                    'Vind wat deze concepten verbindt',
+                    'Zoek naar het gemeenschappelijke thema of de categorie',
+                    'Welke bredere term zou al deze items kunnen beschrijven?'
+                ]
+            }
+        };
+
+        // Get hints for the specified language and quiz type
+        const languageHints = hints[language]?.[quizType];
+
+        // If no hints exist for this language/quiz type, fall back to English
+        if (!languageHints || languageHints.length === 0) {
+            const fallbackHints = hints['en'][quizType];
+            return fallbackHints[Math.floor(Math.random() * fallbackHints.length)];
+        }
+
+        // Return a random hint from the available options
+        return languageHints[Math.floor(Math.random() * languageHints.length)];
+    }
+
+    /**
+     * Get localized branding text based on quiz type and language
+     * @param quizType Type of quiz
+     * @param language Target language
+     * @returns Localized branding text
+     */
+    private getLocalizedBrandingText(quizType: QuizType, language: Language): string {
+        const quizTypeName = this.getQuizTypeName(quizType);
+
+        // Brand text by language
+        const brandTexts: Record<Language, Record<QuizType, string[]>> = {
+            'en': {
+                'WORDLE': [`${quizTypeName} by FB Quiz`, 'Word Play'],
+                'NUMBER_SEQUENCE': [`${quizTypeName} by FB Quiz`, 'Number Challenge'],
+                'RHYME_TIME': [`${quizTypeName} by FB Quiz`, 'Rhyme Time'],
+                'CONCEPT_CONNECTION': [`${quizTypeName} by FB Quiz`, 'Connect the Concepts']
+            },
+            'fr': {
+                'WORDLE': [`${quizTypeName} par FB Quiz`, 'Jeu de Mots'],
+                'NUMBER_SEQUENCE': [`${quizTypeName} par FB Quiz`, 'Défi Numérique'],
+                'RHYME_TIME': [`${quizTypeName} par FB Quiz`, 'Jeu de Rimes'],
+                'CONCEPT_CONNECTION': [`${quizTypeName} par FB Quiz`, 'Connexion de Concepts']
+            },
+            'es': {
+                'WORDLE': [`${quizTypeName} por FB Quiz`, 'Juego de Palabras'],
+                'NUMBER_SEQUENCE': [`${quizTypeName} por FB Quiz`, 'Desafío Numérico'],
+                'RHYME_TIME': [`${quizTypeName} por FB Quiz`, 'Juego de Rimas'],
+                'CONCEPT_CONNECTION': [`${quizTypeName} por FB Quiz`, 'Conexión de Conceptos']
+            },
+            'de': {
+                'WORDLE': [`${quizTypeName} von FB Quiz`, 'Wortspiel'],
+                'NUMBER_SEQUENCE': [`${quizTypeName} von FB Quiz`, 'Zahlenrätsel'],
+                'RHYME_TIME': [`${quizTypeName} von FB Quiz`, 'Reimspiel'],
+                'CONCEPT_CONNECTION': [`${quizTypeName} von FB Quiz`, 'Konzeptverbindung']
+            },
+            'it': {
+                'WORDLE': [`${quizTypeName} da FB Quiz`, 'Gioco di Parole'],
+                'NUMBER_SEQUENCE': [`${quizTypeName} da FB Quiz`, 'Sfida Numerica'],
+                'RHYME_TIME': [`${quizTypeName} da FB Quiz`, 'Gioco di Rime'],
+                'CONCEPT_CONNECTION': [`${quizTypeName} da FB Quiz`, 'Connessione di Concetti']
+            },
+            'pt': {
+                'WORDLE': [`${quizTypeName} por FB Quiz`, 'Jogo de Palavras'],
+                'NUMBER_SEQUENCE': [`${quizTypeName} por FB Quiz`, 'Desafio Numérico'],
+                'RHYME_TIME': [`${quizTypeName} por FB Quiz`, 'Jogo de Rimas'],
+                'CONCEPT_CONNECTION': [`${quizTypeName} por FB Quiz`, 'Conexão de Conceitos']
+            },
+            'nl': {
+                'WORDLE': [`${quizTypeName} door FB Quiz`, 'Woordspel'],
+                'NUMBER_SEQUENCE': [`${quizTypeName} door FB Quiz`, 'Getallenuitdaging'],
+                'RHYME_TIME': [`${quizTypeName} door FB Quiz`, 'Rijmspel'],
+                'CONCEPT_CONNECTION': [`${quizTypeName} door FB Quiz`, 'Conceptverbinding']
+            }
+        };
+
+        // Get branding texts for the specified language and quiz type
+        const languageBrands = brandTexts[language]?.[quizType];
+
+        // If no branding texts exist for this language/quiz type, fall back to English
+        if (!languageBrands || languageBrands.length === 0) {
+            const fallbackBrands = brandTexts['en'][quizType];
+            return fallbackBrands[0]; // Use the first option as default
+        }
+
+        // Return the first branding text option (most consistently branded)
+        return languageBrands[0];
+    }
+
+    // Add any additional methods or helper functions you want to include
+}
+
+// Add these methods at the bottom of the file, before the closing class bracket
+/**
+ * Gets language-specific context for AI prompts
+ */
+private getLanguageContext(language: string): {
+    generateIn: string;
+    aboutTheme: string;
+    ensureWord: string;
+    letters: string;
+    a: string;
+    level: string;
+} {
+    // Default English context
+    const englishContext = {
+        generateIn: 'Generate in English',
+        aboutTheme: 'about',
+        ensureWord: 'Make sure to use a word with',
+        letters: 'letters',
+        a: 'a',
+        level: 'level'
+    };
+
+    // Language-specific contexts
+    const contexts: Record<string, typeof englishContext> = {
+        en: englishContext,
+        fr: {
+            generateIn: 'Générer en français',
+            aboutTheme: 'sur le thème',
+            ensureWord: 'Assurez-vous d\'utiliser un mot avec',
+            letters: 'lettres',
+            a: 'un',
+            level: 'niveau'
+        },
+        es: {
+            generateIn: 'Generar en español',
+            aboutTheme: 'sobre el tema',
+            ensureWord: 'Asegúrate de usar una palabra con',
+            letters: 'letras',
+            a: 'un',
+            level: 'nivel'
+        },
+        de: {
+            generateIn: 'Auf Deutsch generieren',
+            aboutTheme: 'zum Thema',
+            ensureWord: 'Verwenden Sie unbedingt ein Wort mit',
+            letters: 'Buchstaben',
+            a: 'ein',
+            level: 'Schwierigkeitsgrad'
+        },
+        it: {
+            generateIn: 'Generare in italiano',
+            aboutTheme: 'sul tema',
+            ensureWord: 'Assicurati di usare una parola con',
+            letters: 'lettere',
+            a: 'un',
+            level: 'livello'
+        },
+        pt: {
+            generateIn: 'Gerar em português',
+            aboutTheme: 'sobre o tema',
+            ensureWord: 'Certifique-se de usar uma palavra com',
+            letters: 'letras',
+            a: 'um',
+            level: 'nível'
+        }
+    };
+
+    return contexts[language] || contexts['en'];
+}
+
+/**
+ * Validates and ensures content is in the correct language
+ */
+private validateLanguageContent(
+    result: CompleteQuizGenerationResult,
+    language: string,
+    quizType: QuizType
+): CompleteQuizGenerationResult {
+    // Log that we're validating language content
+    console.log(`🔍 SmartGeneratorAdapter: Validating ${language} content`);
+
+    // For WORDLE quizzes, ensure the answer is a word in the target language
+    if (quizType === QuizType.WORDLE && result.answer) {
+        // Check if the answer looks like it might be in English instead of target language
+        const commonEnglishWords = ['THE', 'WHEN', 'WHAT', 'WHERE', 'WHICH', 'THERE', 'THESE', 'THOSE', 'TRAIN', 'PLANE'];
+
+        if (commonEnglishWords.includes(result.answer.toUpperCase()) && language !== 'en') {
+            console.warn(`⚠️ SmartGeneratorAdapter: Answer "${result.answer}" appears to be in English instead of ${language}`);
+
+            // Try to get a replacement word in the correct language
+            // For now, we'll log this issue and keep the original answer
+            // In a real implementation, you might want to try generating a new answer
+        }
+
+        // Ensure accented characters are preserved if they should be present in this language
+        if (['fr', 'es', 'pt', 'it'].includes(language)) {
+            console.log(`📝 SmartGeneratorAdapter: Checking for accent preservation in ${language} content`);
+
+            // In a more comprehensive implementation, you might check for expected accent patterns
+            // and try to correct them if missing
+        }
+    }
+
+    // For all quiz types, check if title and subtitle appear to be in the correct language
+    // This is a very basic check - in a real implementation you might use a language detection service
+    const englishWords = ['THE', 'AND', 'QUIZ', 'TEST', 'CHALLENGE', 'PUZZLE', 'GAME'];
+    let titleWords = result.title.toUpperCase().split(' ');
+
+    // Count how many English words appear in the title
+    const englishWordCount = titleWords.filter(word => englishWords.includes(word)).length;
+
+    // If multiple English words in a non-English title, log a warning
+    if (englishWordCount > 1 && language !== 'en' && titleWords.length > 2) {
+        console.warn(`⚠️ SmartGeneratorAdapter: Title "${result.title}" may not be in ${language}`);
+        // In a full implementation, you might try to regenerate the title
+    }
+
+    return result;
+} 

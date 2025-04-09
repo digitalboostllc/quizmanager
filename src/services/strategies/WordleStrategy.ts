@@ -12,11 +12,8 @@ interface ColorHintTranslations {
 
 export class WordleStrategy extends BaseQuizStrategy {
   private readonly COMMON_LETTERS = 'ESARTNLICOUP';
-  private readonly PLACEHOLDER_LETTERS = {
-    UNKNOWN: 'X',
-    PARTIAL: 'Y',
-    EMPTY: '_'
-  };
+  private readonly PLACEHOLDER_LETTERS = 'QWJKXZ';
+  private readonly WORD_LENGTH = 5; // Enforce 5-letter words
 
   // Language-specific hint translations cache
   private static hintTranslationsCache = new Map<Language, ColorHintTranslations>();
@@ -181,107 +178,312 @@ export class WordleStrategy extends BaseQuizStrategy {
 
   private generateAttempts(word: string): string[] {
     const attempts: string[] = [];
-    const wordLetters = new Set(word.split(''));
+    const usedLetters = new Set<string>();
+    const lettersRemaining = new Set<string>(word.split(''));
     const wordLength = word.length;
 
-    // Step 1: First attempt - Use common letters not in the word
-    attempts.push(this.generateEliminationAttempt(word));
+    // First attempt: Show 1-2 misplaced letters from the word
+    attempts.push(this.generateMisplacedAttempt(word, usedLetters, lettersRemaining, wordLength));
 
-    // Step 2: Second attempt - Show half of the unique letters in strategic misplaced positions
-    const uniqueLetters = Array.from(wordLetters);
-    const halfLength = Math.ceil(uniqueLetters.length / 2);
-    const firstHalfLetters = uniqueLetters.slice(0, halfLength);
+    // Second attempt: Show 1-2 correct letters and 1 misplaced
+    attempts.push(this.generateMixedAttempt(word, usedLetters, lettersRemaining, wordLength));
 
-    const secondAttempt = new Array(wordLength).fill('');
-    firstHalfLetters.forEach(letter => {
-      const correctPos = word.indexOf(letter);
-      // Place each letter in a position that's not its correct position
-      let newPos = (correctPos + 1) % wordLength;
-      while (secondAttempt[newPos] !== '') {
-        newPos = (newPos + 1) % wordLength;
-      }
-      secondAttempt[newPos] = letter;
-    });
-
-    // Fill remaining positions with random letters not in word
-    for (let i = 0; i < wordLength; i++) {
-      if (secondAttempt[i] === '') {
-        secondAttempt[i] = this.getRandomLetters(1, new Set([...word, ...secondAttempt]))[0];
-      }
-    }
-    attempts.push(secondAttempt.join(''));
-
-    // Step 3: Third attempt - Show remaining letters in misplaced positions + one correct
-    const remainingLetters = uniqueLetters.slice(halfLength);
-    const thirdAttempt = new Array(wordLength).fill(this.PLACEHOLDER_LETTERS.UNKNOWN);
-
-    // Place one letter in correct position (middle letter for better gameplay)
-    const midPoint = Math.floor(wordLength / 2);
-    thirdAttempt[midPoint] = word[midPoint];
-
-    // Place remaining letters in misplaced positions
-    remainingLetters.forEach((letter) => {
-      if (letter !== word[midPoint]) {
-        const correctPos = word.indexOf(letter);
-        let newPos = (correctPos + 2) % wordLength;
-        while (thirdAttempt[newPos] !== this.PLACEHOLDER_LETTERS.UNKNOWN || newPos === midPoint) {
-          newPos = (newPos + 1) % wordLength;
-        }
-        thirdAttempt[newPos] = letter;
-      }
-    });
-
-    // Fill remaining positions with random letters not in word
-    for (let i = 0; i < wordLength; i++) {
-      if (thirdAttempt[i] === this.PLACEHOLDER_LETTERS.UNKNOWN) {
-        thirdAttempt[i] = this.getRandomLetters(1, new Set([...word]))[0];
-      }
-    }
-    attempts.push(thirdAttempt.join(''));
+    // Third attempt: Show remaining letters with strategic placement
+    attempts.push(this.generateFinalAttempt(word, usedLetters, lettersRemaining, wordLength));
 
     return attempts;
   }
 
-  private generateEliminationAttempt(word: string): string {
-    const wordLetters = new Set(word.split(''));
-    const commonLettersNotInWord = this.COMMON_LETTERS.split('')
-      .filter(l => !wordLetters.has(l));
+  private generateMisplacedAttempt(
+    word: string,
+    usedLetters: Set<string>,
+    lettersRemaining: Set<string>,
+    wordLength: number
+  ): string {
+    const attempt = new Array(wordLength).fill('');
+    const availableLetters = Array.from(lettersRemaining);
 
-    // Fill with common letters not in word, then random letters if needed
-    const attempt = commonLettersNotInWord.slice(0, word.length);
-    if (attempt.length < word.length) {
-      const additionalLetters = this.getRandomLetters(
-        word.length - attempt.length,
-        new Set([...wordLetters, ...attempt])
-      );
-      attempt.push(...additionalLetters);
+    // Place 1-2 misplaced letters from the word
+    const numMisplaced = Math.min(
+      availableLetters.length,
+      Math.floor(Math.random() * 2) + 1 // 1-2 misplaced letters
+    );
+
+    for (let i = 0; i < numMisplaced; i++) {
+      const letter = availableLetters[i];
+      const correctPositions = this.getLetterPositions(word, letter);
+      let placed = false;
+
+      // Try to place in a wrong position
+      for (let tries = 0; tries < wordLength * 2 && !placed; tries++) {
+        const pos = Math.floor(Math.random() * wordLength);
+        if (attempt[pos] === '' && !correctPositions.includes(pos)) {
+          attempt[pos] = letter;
+          usedLetters.add(letter);
+          placed = true;
+        }
+      }
+
+      // If couldn't find a wrong position, place in any empty position
+      if (!placed) {
+        for (let pos = 0; pos < wordLength; pos++) {
+          if (attempt[pos] === '') {
+            attempt[pos] = letter;
+            usedLetters.add(letter);
+            break;
+          }
+        }
+      }
+    }
+
+    // Fill remaining positions with strategic letters
+    for (let i = 0; i < wordLength; i++) {
+      if (attempt[i] === '') {
+        // Prioritize using common letters that aren't in the word
+        const commonLetters = this.COMMON_LETTERS.split('')
+          .filter(l => !word.includes(l) && !usedLetters.has(l));
+
+        const randomLetter = commonLetters.length > 0
+          ? commonLetters[Math.floor(Math.random() * commonLetters.length)]
+          : this.getRandomLetter(usedLetters, word);
+
+        attempt[i] = randomLetter;
+        usedLetters.add(randomLetter);
+      }
     }
 
     return attempt.join('');
   }
 
-  private getRandomLetters(count: number, exclude: Set<string>): string[] {
-    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    const availableLetters = alphabet.split('').filter(l => !exclude.has(l));
-    const result: string[] = [];
+  private generateMixedAttempt(
+    word: string,
+    usedLetters: Set<string>,
+    lettersRemaining: Set<string>,
+    wordLength: number
+  ): string {
+    const attempt = new Array(wordLength).fill('');
+    const availableLetters = Array.from(lettersRemaining);
 
-    while (result.length < count && availableLetters.length > 0) {
-      const index = Math.floor(Math.random() * availableLetters.length);
-      result.push(availableLetters[index]);
-      availableLetters.splice(index, 1);
+    // Find duplicate letters in the word
+    const letterCounts = new Map<string, number>();
+    for (const letter of word) {
+      letterCounts.set(letter, (letterCounts.get(letter) || 0) + 1);
     }
 
-    return result;
+    // Get letters with duplicates
+    const duplicateLetters = Array.from(letterCounts.entries())
+      .filter(([_, count]) => count > 1)
+      .map(([letter]) => letter);
+
+    // Place duplicate letters first if they exist
+    if (duplicateLetters.length > 0) {
+      const duplicateLetter = duplicateLetters[0];
+      const positions = this.getLetterPositions(word, duplicateLetter);
+
+      // Place both occurrences of the duplicate letter
+      for (let i = 0; i < Math.min(2, positions.length); i++) {
+        const pos = positions[i];
+        attempt[pos] = word[pos];
+        usedLetters.add(word[pos]);
+        lettersRemaining.delete(word[pos]);
+      }
+    }
+
+    // Place more correct letters (2-3 depending on word length)
+    const numCorrect = Math.min(
+      Math.floor(wordLength / 2), // Up to half of the word length
+      Math.floor(Math.random() * 2) + 2 // 2-3 correct letters
+    );
+
+    const positions = Array.from({ length: wordLength }, (_, i) => i)
+      .filter(pos => attempt[pos] === ''); // Only consider empty positions
+
+    for (let i = 0; i < numCorrect && positions.length > 0; i++) {
+      const pos = positions.splice(Math.floor(Math.random() * positions.length), 1)[0];
+      attempt[pos] = word[pos];
+      usedLetters.add(word[pos]);
+      lettersRemaining.delete(word[pos]);
+    }
+
+    // Place 1-2 misplaced letters if we have any letters remaining
+    if (availableLetters.length > 0) {
+      const numMisplaced = Math.min(availableLetters.length, Math.floor(Math.random() * 2) + 1);
+
+      for (let i = 0; i < numMisplaced; i++) {
+        const letter = availableLetters[i];
+        const correctPositions = this.getLetterPositions(word, letter);
+        let placed = false;
+
+        // Try to place in a wrong position
+        for (let tries = 0; tries < wordLength * 2 && !placed; tries++) {
+          const pos = Math.floor(Math.random() * wordLength);
+          if (attempt[pos] === '' && !correctPositions.includes(pos)) {
+            attempt[pos] = letter;
+            usedLetters.add(letter);
+            placed = true;
+          }
+        }
+
+        // If couldn't find a wrong position, place in any empty position
+        if (!placed) {
+          for (let pos = 0; pos < wordLength; pos++) {
+            if (attempt[pos] === '') {
+              attempt[pos] = letter;
+              usedLetters.add(letter);
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // Fill remaining positions with strategic letters
+    for (let i = 0; i < wordLength; i++) {
+      if (attempt[i] === '') {
+        // Prioritize using common letters that aren't in the word
+        const commonLetters = this.COMMON_LETTERS.split('')
+          .filter(l => !word.includes(l) && !usedLetters.has(l));
+
+        const randomLetter = commonLetters.length > 0
+          ? commonLetters[Math.floor(Math.random() * commonLetters.length)]
+          : this.getRandomLetter(usedLetters, word);
+
+        attempt[i] = randomLetter;
+        usedLetters.add(randomLetter);
+      }
+    }
+
+    return attempt.join('');
+  }
+
+  private generateFinalAttempt(
+    word: string,
+    usedLetters: Set<string>,
+    lettersRemaining: Set<string>,
+    wordLength: number
+  ): string {
+    const attempt = new Array(wordLength).fill('');
+    const remainingLetters = Array.from(lettersRemaining);
+
+    // Place remaining letters from the word strategically
+    for (const letter of remainingLetters) {
+      const correctPositions = this.getLetterPositions(word, letter);
+      let placed = false;
+
+      // Try to place in a wrong position that's not adjacent to correct positions
+      for (let tries = 0; tries < wordLength * 2 && !placed; tries++) {
+        const pos = Math.floor(Math.random() * wordLength);
+        const isAdjacent = correctPositions.some(cp => Math.abs(cp - pos) <= 1);
+
+        if (attempt[pos] === '' && !correctPositions.includes(pos) && !isAdjacent) {
+          attempt[pos] = letter;
+          usedLetters.add(letter);
+          placed = true;
+        }
+      }
+
+      // If couldn't find an ideal position, place in any empty position
+      if (!placed) {
+        for (let pos = 0; pos < wordLength; pos++) {
+          if (attempt[pos] === '') {
+            attempt[pos] = letter;
+            usedLetters.add(letter);
+            break;
+          }
+        }
+      }
+    }
+
+    // Fill remaining positions with strategic letters
+    for (let i = 0; i < wordLength; i++) {
+      if (attempt[i] === '') {
+        // Use placeholder letters that are less common
+        const unusedPlaceholders = this.PLACEHOLDER_LETTERS.split('')
+          .filter(l => !usedLetters.has(l) && !word.includes(l));
+
+        const randomLetter = unusedPlaceholders.length > 0
+          ? unusedPlaceholders[Math.floor(Math.random() * unusedPlaceholders.length)]
+          : this.getRandomLetter(usedLetters, word);
+
+        attempt[i] = randomLetter;
+        usedLetters.add(randomLetter);
+      }
+    }
+
+    return attempt.join('');
+  }
+
+  private getRandomLetter(usedLetters: Set<string>, word: string): string {
+    // First try to use common letters that aren't in the word
+    const commonLetters = this.COMMON_LETTERS.split('')
+      .filter(l => !usedLetters.has(l) && !word.includes(l));
+
+    if (commonLetters.length > 0) {
+      return commonLetters[Math.floor(Math.random() * commonLetters.length)];
+    }
+
+    // Then try placeholder letters
+    const placeholderLetters = this.PLACEHOLDER_LETTERS.split('')
+      .filter(l => !usedLetters.has(l) && !word.includes(l));
+
+    if (placeholderLetters.length > 0) {
+      return placeholderLetters[Math.floor(Math.random() * placeholderLetters.length)];
+    }
+
+    // Finally, use any unused letter from the alphabet
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+    const unusedLetters = alphabet.filter(l => !usedLetters.has(l) && !word.includes(l));
+
+    return unusedLetters.length > 0
+      ? unusedLetters[Math.floor(Math.random() * unusedLetters.length)]
+      : alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+
+  private getLetterPositions(word: string, letter: string): number[] {
+    const positions: number[] = [];
+    for (let i = 0; i < word.length; i++) {
+      if (word[i] === letter) {
+        positions.push(i);
+      }
+    }
+    return positions;
   }
 
   private generateWordGrid(attempts: string[], answer: string): string {
-    const processedAttempts = attempts.map((attempt, index) => {
-      return `<div class="word-attempt">
-        <div class="word-grid-row">${this.processAttempt(attempt, answer)}</div>
-      </div>`;
+    console.log('🔄 WordleStrategy: Generating word grid:', {
+      attempts,
+      answer,
+      attemptCount: attempts.length
     });
 
-    return `<div class="word-grid-container">${processedAttempts.join('\n')}</div>`;
+    const processedAttempts = attempts.map((attempt, index) => {
+      console.log(`📝 Processing attempt ${index + 1}:`, {
+        attempt,
+        answer,
+        position: index
+      });
+
+      const processed = `<div class="word-attempt">
+        <div class="word-grid-row">${this.processAttempt(attempt, answer)}</div>
+      </div>`;
+
+      console.log(`✅ Processed attempt ${index + 1}:`, {
+        html: processed,
+        letterCount: attempt.length
+      });
+
+      return processed;
+    });
+
+    const gridHtml = `<div class="word-grid-container">${processedAttempts.join('\n')}</div>`;
+
+    console.log('✅ Generated word grid:', {
+      html: gridHtml,
+      attemptCount: processedAttempts.length,
+      totalLetters: attempts.reduce((sum, attempt) => sum + attempt.length, 0)
+    });
+
+    return gridHtml;
   }
 
   private processAttempt(attempt: string, answer: string): string {

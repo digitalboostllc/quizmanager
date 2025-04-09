@@ -1,3 +1,4 @@
+import { trackPerformance } from '@/lib/monitoring';
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/services/api/errors/ApiError';
 import { Prisma, QuizStatus } from '@prisma/client';
@@ -96,6 +97,10 @@ function isConnectionError(error: any): boolean {
 }
 
 export async function GET(request: Request) {
+  const startTime = Date.now();
+  const path = request.url;
+  const method = 'GET';
+
   // Set response headers for caching
   const headers = {
     'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
@@ -134,13 +139,8 @@ export async function GET(request: Request) {
       title: true,
       imageUrl: true,
       status: true,
+      templateId: true,
       createdAt: true,
-      template: {
-        select: {
-          id: true,
-          quizType: true,
-        },
-      },
       _count: {
         select: {
           scheduledPost: true,
@@ -150,7 +150,8 @@ export async function GET(request: Request) {
 
     // Execute the query with connection retries
     const quizzes = await withConnectionRetry(async () => {
-      return prisma.quiz.findMany({
+      // First get the quizzes
+      const quizzesData = await prisma.quiz.findMany({
         where,
         select: SELECT_FIELDS,
         orderBy: {
@@ -158,6 +159,34 @@ export async function GET(request: Request) {
         },
         take: limit,
       });
+
+      // Get unique template IDs from the quizzes
+      const templateIds = [...new Set(quizzesData.map(quiz => quiz.templateId))];
+
+      // Fetch all needed templates in a single query
+      const templates = await prisma.template.findMany({
+        where: {
+          id: {
+            in: templateIds
+          }
+        },
+        select: {
+          id: true,
+          quizType: true,
+        }
+      });
+
+      // Create a lookup map for quick template access
+      const templateMap = templates.reduce((map, template) => {
+        map[template.id] = template;
+        return map;
+      }, {} as Record<string, { id: string, quizType: string }>);
+
+      // Combine quiz data with template data
+      return quizzesData.map(quiz => ({
+        ...quiz,
+        template: templateMap[quiz.templateId]
+      }));
     });
 
     // Cache the results
@@ -167,7 +196,18 @@ export async function GET(request: Request) {
       ttl: query ? CACHE_TTL.search : CACHE_TTL.default
     };
 
-    return NextResponse.json(quizzes, { headers });
+    try {
+      const apiResponse = NextResponse.json(quizzes, { headers });
+      trackPerformance(apiResponse, path, method, startTime, isCacheValid(cacheKey));
+      return apiResponse;
+    } catch (err) {
+      console.error("Error creating response:", err);
+      trackPerformance(null, path, method, startTime, false, "Error creating response");
+      return NextResponse.json({
+        data: [],
+        error: "Error creating response"
+      }, { status: 500 });
+    }
   } catch (error) {
     console.error('Error searching quizzes:', error);
 
@@ -194,13 +234,21 @@ export async function GET(request: Request) {
       errorCode = 'CONNECTION_ERROR';
     }
 
-    return NextResponse.json(
-      {
-        error: errorMessage,
-        code: errorCode,
-        data: []
-      },
-      { status: statusCode, headers }
-    );
+    try {
+      const errorResponse = NextResponse.json(
+        {
+          error: errorMessage,
+          code: errorCode,
+          data: []
+        },
+        { status: statusCode, headers }
+      );
+      trackPerformance(errorResponse, path, method, startTime, false, errorMessage);
+      return errorResponse;
+    } catch (err) {
+      console.error("Error creating error response:", err);
+      trackPerformance(null, path, method, startTime, false, "Error creating error response");
+      return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    }
   }
 } 

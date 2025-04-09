@@ -1,122 +1,159 @@
 'use client';
 
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { useLoadingDelay } from '@/contexts/LoadingDelayContext';
+import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { AlertCircle } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 export default function RegisterPage() {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [passwordError, setPasswordError] = useState('');
-    const { register, error, loading } = useAuth();
-    const { simulateLoading } = useLoadingDelay();
+    const [redirectPath, setRedirectPath] = useState('/dashboard');
+    const { register, isLoading, isAuthenticated, error } = useAuth();
+    const searchParams = useSearchParams();
+    const { toast } = useToast();
+    const router = useRouter();
 
-    const validatePassword = () => {
-        if (password !== confirmPassword) {
-            setPasswordError('Passwords do not match');
-            return false;
+    // Check for redirectUrl in query params or session storage
+    useEffect(() => {
+        const callbackUrl = searchParams.get('callbackUrl');
+        const storedRedirectUrl = typeof window !== 'undefined' ? sessionStorage.getItem('redirectUrl') : null;
+
+        if (callbackUrl) {
+            setRedirectPath(callbackUrl);
+        } else if (storedRedirectUrl) {
+            setRedirectPath(storedRedirectUrl);
+            // Clear the stored URL after using it
+            sessionStorage.removeItem('redirectUrl');
         }
-        if (password.length < 8) {
-            setPasswordError('Password must be at least 8 characters long');
-            return false;
+    }, [searchParams]);
+
+    // Redirect if already authenticated
+    useEffect(() => {
+        if (isAuthenticated && !isLoading) {
+            router.push(redirectPath);
         }
-        setPasswordError('');
-        return true;
-    };
+    }, [isAuthenticated, isLoading, redirectPath, router]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!validatePassword()) return;
-
-        try {
-            // Wrap the register function with simulateLoading
-            await simulateLoading(register(name, email, password));
-        } catch (error) {
-            console.error("Registration error:", error);
+        if (!name || !email || !password) {
+            toast({
+                title: "Missing Fields",
+                description: "Please fill in all fields",
+                variant: "destructive"
+            });
+            return;
         }
+
+        if (password.length < 8) {
+            toast({
+                title: "Password Too Short",
+                description: "Password must be at least 8 characters long",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        await register(name, email, password, redirectPath);
     };
 
     return (
-        <div className="container flex items-center justify-center min-h-[80vh] py-8">
-            <Card className="w-full max-w-md">
-                <CardHeader className="space-y-1">
-                    <CardTitle className="text-2xl font-bold">Create an account</CardTitle>
-                    <CardDescription>
-                        Enter your information to create an account
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        {(error || passwordError) && (
-                            <Alert variant="destructive">
-                                <AlertCircle className="h-4 w-4" />
-                                <AlertDescription>{error || passwordError}</AlertDescription>
-                            </Alert>
+        <div className="flex min-h-screen flex-col items-center justify-center py-12 sm:px-6 lg:px-8">
+            <div className="sm:mx-auto sm:w-full sm:max-w-md">
+                <h2 className="mt-6 text-center text-3xl font-bold tracking-tight">
+                    Create a new account
+                </h2>
+                <p className="mt-2 text-center text-sm text-muted-foreground">
+                    Or{' '}
+                    <Link href="/auth/login" className="font-medium text-primary hover:text-primary/90">
+                        sign in to your existing account
+                    </Link>
+                </p>
+            </div>
+
+            <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+                <div className="bg-card px-4 py-8 shadow sm:rounded-lg sm:px-10">
+                    <form className="space-y-6" onSubmit={handleSubmit}>
+                        <div>
+                            <label htmlFor="name" className="block text-sm font-medium">
+                                Full name
+                            </label>
+                            <div className="mt-1">
+                                <input
+                                    id="name"
+                                    name="name"
+                                    type="text"
+                                    autoComplete="name"
+                                    required
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm bg-background px-3 py-2"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label htmlFor="email" className="block text-sm font-medium">
+                                Email address
+                            </label>
+                            <div className="mt-1">
+                                <input
+                                    id="email"
+                                    name="email"
+                                    type="email"
+                                    autoComplete="email"
+                                    required
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm bg-background px-3 py-2"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label htmlFor="password" className="block text-sm font-medium">
+                                Password
+                            </label>
+                            <div className="mt-1">
+                                <input
+                                    id="password"
+                                    name="password"
+                                    type="password"
+                                    autoComplete="new-password"
+                                    required
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm bg-background px-3 py-2"
+                                />
+                            </div>
+                        </div>
+
+                        {error && (
+                            <div className="rounded-md bg-destructive/15 p-3">
+                                <div className="flex">
+                                    <div className="text-sm text-destructive">
+                                        {error}
+                                    </div>
+                                </div>
+                            </div>
                         )}
-                        <div className="space-y-2">
-                            <Label htmlFor="name">Name</Label>
-                            <Input
-                                id="name"
-                                placeholder="John Doe"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                required
-                            />
+
+                        <div>
+                            <Button
+                                type="submit"
+                                className="flex w-full justify-center"
+                                disabled={isLoading}
+                            >
+                                {isLoading ? 'Creating account...' : 'Register'}
+                            </Button>
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="email">Email</Label>
-                            <Input
-                                id="email"
-                                type="email"
-                                placeholder="name@example.com"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                required
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="password">Password</Label>
-                            <Input
-                                id="password"
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="confirmPassword">Confirm Password</Label>
-                            <Input
-                                id="confirmPassword"
-                                type="password"
-                                value={confirmPassword}
-                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                required
-                            />
-                        </div>
-                        <Button type="submit" className="w-full" disabled={loading}>
-                            {loading ? 'Creating account...' : 'Register'}
-                        </Button>
                     </form>
-                </CardContent>
-                <CardFooter className="flex flex-col space-y-4">
-                    <div className="text-sm text-center text-muted-foreground">
-                        Already have an account?{' '}
-                        <Link href="/auth/login" className="text-primary hover:underline">
-                            Login
-                        </Link>
-                    </div>
-                </CardFooter>
-            </Card>
+                </div>
+            </div>
         </div>
     );
 }

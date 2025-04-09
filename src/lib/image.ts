@@ -13,6 +13,7 @@ export async function generateImage(
   const {
     width = IMAGE_SETTINGS.DEFAULT_WIDTH,
     height = IMAGE_SETTINGS.DEFAULT_HEIGHT,
+    filename = `quiz-${new Date().toISOString().replace(/[:.]/g, '-')}.png`
   } = options;
 
   try {
@@ -51,10 +52,6 @@ export async function generateImage(
       previewEnd: '...' + htmlContent.substring(htmlContent.length - 100),
       usingQuizTemplate: htmlContent.includes('quiz-template')
     });
-
-    // Generate a filename based on timestamp if not provided
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = options.filename || `quiz-${timestamp}.png`;
 
     // Call the server-side API
     const response = await fetch('/api/generate-image', {

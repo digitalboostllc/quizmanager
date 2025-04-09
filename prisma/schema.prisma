@@ -5,58 +5,141 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("POSTGRES_PRISMA_URL")
-  directUrl = env("POSTGRES_URL_NON_POOLING")
+  provider     = "postgresql"
+  url          = env("POSTGRES_PRISMA_URL")
+  directUrl    = env("POSTGRES_URL_NON_POOLING")
   relationMode = "prisma"
 }
 
-model Template {
-  id          String   @id @default(cuid())
-  name        String
-  html        String
-  css         String?
-  variables   Json
-  quizType    QuizType
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  imageUrl    String?
-  description String?
-  quizzes     Quiz[]
-  
-  @@index([quizType, createdAt])
-  @@index([quizType, name])
+model AutoScheduleSlot {
+  id        String   @id
+  dayOfWeek Int
+  timeOfDay String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+
+  @@unique([dayOfWeek, timeOfDay])
+  @@index([dayOfWeek, timeOfDay])
+  @@index([isActive, dayOfWeek])
+}
+
+model ContentUsage {
+  id          String      @id
+  userId      String?
+  contentType ContentType @default(WORD)
+  value       String
+  format      String?
+  metadata    Json?
+  isUsed      Boolean     @default(true)
+  usedAt      DateTime    @default(now())
+  createdAt   DateTime    @default(now())
+
+  @@unique([userId, contentType, value, format])
+  @@index([contentType])
+  @@index([contentType, isUsed])
+  @@index([createdAt])
+  @@index([format])
+  @@index([isUsed])
+  @@index([usedAt])
+  @@index([userId, contentType, isUsed])
+  @@index([userId, contentType, usedAt])
+  @@index([userId])
+  @@index([value])
+}
+
+model Invoice {
+  id                 String        @id
+  userId             String
+  stripeInvoiceId    String        @unique
+  amount             Int
+  currency           String        @default("USD")
+  status             InvoiceStatus @default(PENDING)
+  billingPeriodStart DateTime?
+  billingPeriodEnd   DateTime?
+  paidAt             DateTime?
+  invoicePdf         String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime
+
+  @@index([createdAt])
+  @@index([status])
+  @@index([stripeInvoiceId])
+  @@index([userId])
+}
+
+model PromotionCode {
+  id                String    @id
+  code              String    @unique
+  description       String
+  discountPercent   Int?
+  discountAmount    Int?
+  stripePromotionId String?   @unique
+  maxRedemptions    Int?
+  redemptionCount   Int       @default(0)
+  expiresAt         DateTime?
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime
+
+  @@index([code, isActive])
+  @@index([expiresAt])
+  @@index([stripePromotionId])
 }
 
 model Quiz {
-  id            String          @id @default(cuid())
-  title         String
-  answer        String
-  solution      String?
-  variables     Json?
-  templateId    String
-  imageUrl      String?
-  status        QuizStatus      @default(DRAFT)
-  language      String          @default("en")
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  userId        String?
-  template      Template        @relation(fields: [templateId], references: [id])
-  user          User?           @relation("UserQuizzes", fields: [userId], references: [id])
-  scheduledPost ScheduledPost[]
+  id         String     @id
+  title      String
+  answer     String
+  solution   String?
+  variables  Json?
+  templateId String
+  imageUrl   String?
+  status     QuizStatus @default(DRAFT)
+  language   String     @default("en")
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime
+  userId     String?
+  batchId    String?
 
-  @@index([userId])
-  @@index([title])
-  @@index([status])
+  @@index([batchId])
   @@index([createdAt])
-  @@index([templateId])
-  @@index([status, createdAt])
-  @@index([templateId, status])
   @@index([language, createdAt])
+  @@index([status, createdAt])
+  @@index([status])
+  @@index([templateId])
+  @@index([templateId, status])
+  @@index([title])
+  @@index([userId])
+}
+
+model QuizBatch {
+  id                   String    @id @default(uuid())
+  userId               String
+  templateIds          String[]
+  count                Int
+  theme                String?
+  difficulty           String
+  variety              Int
+  language             String
+  status               String    @default("PROCESSING")
+  completedCount       Int       @default(0)
+  currentStage         String    @default("preparing")
+  startedAt            DateTime  @default(now())
+  completedAt          DateTime?
+  errorMessage         String?
+  timeSlotDistribution Json
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime
+
+  @@index([createdAt])
+  @@index([status])
+  @@index([userId])
+  @@index([userId, status])
 }
 
 model ScheduledPost {
-  id           String     @id @default(cuid())
+  id           String     @id
   quizId       String
   scheduledAt  DateTime
   publishedAt  DateTime?
@@ -67,83 +150,159 @@ model ScheduledPost {
   retryCount   Int        @default(0)
   lastRetryAt  DateTime?
   createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  quiz         Quiz       @relation(fields: [quizId], references: [id])
+  updatedAt    DateTime
 
   @@unique([quizId, scheduledAt])
+  @@index([quizId])
+  @@index([quizId, status])
   @@index([scheduledAt])
   @@index([status])
-  @@index([quizId])
   @@index([status, scheduledAt])
-  @@index([quizId, status])
 }
 
-model AutoScheduleSlot {
-  id        String   @id @default(cuid())
-  dayOfWeek Int
-  timeOfDay String
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model Session {
+  id           String   @id
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
 
-  @@unique([dayOfWeek, timeOfDay])
-  @@index([dayOfWeek, timeOfDay])
-  @@index([isActive, dayOfWeek])
+  @@index([expires])
+  @@index([userId])
 }
 
 model Settings {
   id                  String   @id @default("default")
   autoScheduleEnabled Boolean  @default(true)
   createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  updatedAt           DateTime
 }
 
-model FacebookSettings {
-  id              String   @id @default(cuid())
-  appId           String
-  appSecret       String
-  pageId          String
-  pageAccessToken String
-  pageName        String?
-  isConnected     Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+model Subscription {
+  id                     String             @id
+  userId                 String             @unique
+  stripeCustomerId       String?            @unique
+  stripeSubscriptionId   String?            @unique
+  planId                 String
+  status                 SubscriptionStatus @default(INACTIVE)
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean            @default(false)
+  canceledAt             DateTime?
+  trialEndDate           DateTime?
+  interval               BillingInterval?
+  metadata               Json?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime
+  amount                 Float?
+  stripeSubscriptionData Json?
 
-  @@map("facebook_settings")
+  @@index([createdAt])
+  @@index([currentPeriodEnd])
+  @@index([planId])
+  @@index([status])
+  @@index([stripeCustomerId])
+  @@index([stripeSubscriptionId])
+  @@index([userId])
+}
+
+model SubscriptionEvent {
+  id             String              @id
+  subscriptionId String
+  userId         String
+  event          String
+  oldStatus      SubscriptionStatus?
+  newStatus      SubscriptionStatus?
+  oldPlanId      String?
+  newPlanId      String?
+  metadata       Json?
+  createdAt      DateTime            @default(now())
+
+  @@index([createdAt])
+  @@index([event])
+  @@index([subscriptionId, createdAt])
+  @@index([subscriptionId])
+  @@index([userId, event])
+  @@index([userId])
+}
+
+model SubscriptionPlan {
+  id                   String   @id
+  name                 String   @unique
+  description          String
+  stripePriceId        String?  @unique
+  stripePriceIdMonthly String?  @unique
+  stripePriceIdYearly  String?  @unique
+  features             Json
+  limits               Json
+  isActive             Boolean  @default(true)
+  sortOrder            Int
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime
+  monthlyPrice         Float?
+  yearlyPrice          Float?
+  oneTimePrice         Float?
+  stripeProductId      String?  @unique
+
+  @@index([isActive, sortOrder])
+}
+
+model Template {
+  id              String   @id
+  name            String
+  html            String
+  css             String?
+  variables       Json
+  quizType        QuizType
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime
+  imageUrl        String?
+  description     String?
+  userId          String
+  planId          String?
+  isPublic        Boolean  @default(false)
+  previewImageUrl String?
+
+  @@index([isPublic])
+  @@index([planId])
+  @@index([quizType, createdAt])
+  @@index([quizType, name])
+  @@index([userId])
+}
+
+model UsageRecord {
+  id           String       @id
+  userId       String
+  resourceType ResourceType
+  count        Int          @default(0)
+  period       String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime
+
+  @@unique([userId, resourceType, period])
+  @@index([period])
+  @@index([resourceType])
+  @@index([userId])
+  @@index([userId, period])
 }
 
 model User {
-  id            String      @id @default(cuid())
+  id            String    @id
   name          String?
-  email         String      @unique
+  email         String    @unique
   emailVerified DateTime?
   image         String?
   password      String?
-  role          UserRole    @default(USER)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  quizzes       Quiz[]      @relation("UserQuizzes")
-  sessions      Session[]
-  wordUsage     WordUsage[]
-  
+  role          UserRole  @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime
+
   @@index([email])
   @@index([role])
 }
 
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  createdAt    DateTime @default(now())
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([expires])
-}
-
 model VerificationToken {
-  id         String   @id @default(cuid())
+  id         String   @id
   identifier String
   token      String   @unique
   expires    DateTime
@@ -153,30 +312,37 @@ model VerificationToken {
   @@index([expires])
 }
 
-model WordUsage {
-  id       String   @id @default(cuid())
-  userId   String
-  word     String
-  language String
-  isUsed   Boolean  @default(true)
-  usedAt   DateTime @default(now())
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, word, language])
-  @@index([userId])
-  @@index([word])
-  @@index([language, isUsed])
-  @@index([userId, language, isUsed])
-  @@index([userId, language, usedAt])
-  @@index([usedAt])
+model facebook_settings {
+  id              String   @id
+  appId           String
+  appSecret       String
+  pageId          String
+  pageAccessToken String
+  pageName        String?
+  isConnected     Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime
 }
 
-enum QuizStatus {
-  DRAFT
-  SCHEDULED
-  PUBLISHED
-  FAILED
-  READY
+enum BillingInterval {
+  MONTHLY
+  YEARLY
+}
+
+enum ContentType {
+  WORD
+  NUMBER
+  SEQUENCE
+  CONCEPT
+  RHYME
+  CUSTOM
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  VOID
+  UNCOLLECTIBLE
 }
 
 enum PostStatus {
@@ -187,11 +353,36 @@ enum PostStatus {
   CANCELLED
 }
 
+enum QuizStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  FAILED
+  READY
+}
+
 enum QuizType {
   WORDLE
   NUMBER_SEQUENCE
   RHYME_TIME
   CONCEPT_CONNECTION
+}
+
+enum ResourceType {
+  QUIZ
+  TEMPLATE
+  SCHEDULED_POST
+  AI_GENERATION
+  API_REQUEST
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELED
+  UNPAID
 }
 
 enum UserRole {

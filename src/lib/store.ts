@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { Quiz, Template, CreateQuizInput } from './types';
 import { createQuiz } from './quiz';
+import { CreateQuizInput, Quiz, Template } from './types';
 
 interface AppState {
   // Quiz Management
@@ -11,6 +11,7 @@ interface AppState {
   addQuiz: (input: CreateQuizInput) => Promise<Quiz>;
   updateQuiz: (quiz: Quiz) => void;
   deleteQuiz: (id: string) => void;
+  regenerateQuizImage: (id: string, imageUrl: string, imagePrompt?: string) => void;
 
   // Template Management
   templates: Template[];
@@ -47,22 +48,57 @@ export const useStore = create<AppState>((set) => ({
     set((state) => ({
       quizzes: state.quizzes.filter((q) => q.id !== id),
     })),
+  regenerateQuizImage: (id, imageUrl, imagePrompt) =>
+    set((state) => ({
+      quizzes: state.quizzes.map((q) =>
+        q.id === id ? { ...q, imageUrl, imagePrompt } : q
+      ),
+    })),
 
   // Template Management
   templates: [],
   selectedTemplate: null,
-  setTemplates: (templates) => set({ templates }),
+  setTemplates: (templates) => {
+    console.log("Setting templates in store:", templates);
+    console.log("Is templates an array?", Array.isArray(templates));
+
+    // Force templates to be an array in all cases
+    let templatesArray = [];
+
+    if (typeof templates === 'function') {
+      // If we're passing a function updater, ensure it receives an array and returns an array
+      set((state) => {
+        const prevTemplates = Array.isArray(state.templates) ? state.templates : [];
+        const result = templates(prevTemplates);
+        return {
+          templates: Array.isArray(result) ? result : [result].filter(Boolean)
+        };
+      });
+    } else {
+      // Direct value assignment
+      templatesArray = Array.isArray(templates) ? templates : [templates].filter(Boolean);
+      set({ templates: templatesArray });
+    }
+  },
   setSelectedTemplate: (template) => set({ selectedTemplate: template }),
   addTemplate: (template) =>
-    set((state) => ({ templates: [...state.templates, template] })),
+    set((state) => ({
+      templates: Array.isArray(state.templates) ? [...state.templates, template] : [template]
+    })),
   updateTemplate: (template) =>
-    set((state) => ({
-      templates: state.templates.map((t) => (t.id === template.id ? template : t)),
-    })),
+    set((state) => {
+      const templates = Array.isArray(state.templates) ? state.templates : [];
+      return {
+        templates: templates.map((t) => (t.id === template.id ? template : t)),
+      };
+    }),
   deleteTemplate: (id) =>
-    set((state) => ({
-      templates: state.templates.filter((t) => t.id !== id),
-    })),
+    set((state) => {
+      const templates = Array.isArray(state.templates) ? state.templates : [];
+      return {
+        templates: templates.filter((t) => t.id !== id),
+      };
+    }),
 
   // UI State
   isLoading: false,

@@ -8,7 +8,8 @@ import { verifyPassword } from './password';
 // Define UserRole enum to match Prisma schema
 export enum UserRole {
     USER = 'USER',
-    ADMIN = 'ADMIN'
+    ADMIN = 'ADMIN',
+    SUPER_ADMIN = 'SUPER_ADMIN'
 }
 
 // Extend the built-in session types
@@ -63,28 +64,33 @@ export const authOptions: NextAuthOptions = {
                     return null;
                 }
 
-                const user = await prisma.user.findUnique({
-                    where: { email: credentials.email },
-                });
+                try {
+                    const user = await prisma.user.findUnique({
+                        where: { email: credentials.email },
+                    });
 
-                if (!user || !user.password) {
+                    if (!user || !user.password) {
+                        return null;
+                    }
+
+                    const isValid = await verifyPassword(credentials.password, user.password);
+
+                    if (!isValid) {
+                        return null;
+                    }
+
+                    // Cast to expected User type
+                    return {
+                        id: user.id,
+                        email: user.email,
+                        name: user.name,
+                        image: user.image,
+                        role: user.role || UserRole.USER,
+                    };
+                } catch (error) {
+                    console.error("Auth error:", error);
                     return null;
                 }
-
-                const isValid = await verifyPassword(credentials.password, user.password);
-
-                if (!isValid) {
-                    return null;
-                }
-
-                // Cast to expected User type
-                return {
-                    id: user.id,
-                    email: user.email,
-                    name: user.name,
-                    image: user.image,
-                    role: user.role || UserRole.USER,
-                };
             },
         }),
     ],
@@ -107,18 +113,34 @@ export const authOptions: NextAuthOptions = {
     // Improved cookie security and configuration
     cookies: {
         sessionToken: {
-            name: process.env.NEXT_PUBLIC_COOKIE_NAME || 'fbquiz-session',
+            name: 'next-auth.session-token',
             options: {
                 httpOnly: true,
                 sameSite: 'lax',
                 path: '/',
                 secure: process.env.NODE_ENV === 'production',
-                domain: process.env.NEXT_PUBLIC_COOKIE_DOMAIN || undefined,
-                maxAge: parseInt(process.env.COOKIE_MAX_AGE || '2592000'), // 30 days in seconds
+                maxAge: 30 * 24 * 60 * 60, // 30 days in seconds
+            },
+        },
+        callbackUrl: {
+            name: 'next-auth.callback-url',
+            options: {
+                sameSite: 'lax',
+                path: '/',
+                secure: process.env.NODE_ENV === 'production',
+            },
+        },
+        csrfToken: {
+            name: 'next-auth.csrf-token',
+            options: {
+                httpOnly: true,
+                sameSite: 'lax',
+                path: '/',
+                secure: process.env.NODE_ENV === 'production',
             },
         },
     },
-    // Add better security with JWT options
+    // Use default JWT handling with proper encryption
     jwt: {
         maxAge: 30 * 24 * 60 * 60, // 30 days in seconds
     },

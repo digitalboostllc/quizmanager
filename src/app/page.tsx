@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingDelay } from "@/contexts/LoadingDelayContext";
 import { cn } from "@/lib/utils";
-import { ArrowRight, BarChart3, Brain, Calendar, Calendar as CalendarIcon, Check, ChevronRight, Clock, CreditCard, Gem, Image, Lightbulb, MessageSquare, Search, Shield, Sparkles, Star, Target, Trophy, Users, Zap } from "lucide-react";
+import { ArrowRight, BarChart3, Brain, Calendar, Calendar as CalendarIcon, Check, ChevronRight, Clock, CreditCard, Gem, Image, Lightbulb, LogIn, MessageSquare, Search, Shield, Sparkles, Star, Target, Trophy, Users, Zap } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -283,17 +283,26 @@ export default function Home() {
               </p>
 
               <div className="flex flex-wrap gap-4">
-                <Button size="lg" className="h-12 px-6 bg-white text-primary hover:bg-white/90 shadow-md">
-                  <Link href="/quizzes/new" className="flex items-center">
-                    Create a New Quiz <Zap className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
+                <Link href="/auth/register">
+                  <Button
+                    size="lg"
+                    className="h-12 px-8 py-2 bg-white text-primary"
+                  >
+                    <Sparkles className="h-5 w-5 mr-2" />
+                    Get started now
+                  </Button>
+                </Link>
 
-                <Button size="lg" variant="outline" className="h-12 px-6 bg-white/10 backdrop-blur-sm border-white/50 text-white hover:bg-white/20 hover:border-white">
-                  <Link href="/templates" className="flex items-center">
-                    Explore Templates <ChevronRight className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
+                <Link href="/auth/login">
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="h-12 px-6 bg-white/10 backdrop-blur-sm border-white/50 text-white"
+                  >
+                    <LogIn className="h-5 w-5 mr-2" />
+                    Log in
+                  </Button>
+                </Link>
               </div>
 
               <div className="flex flex-wrap items-center gap-4 text-white/90 text-sm">
@@ -358,7 +367,7 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" asChild>
-                <Link href="/templates">
+                <Link href="/dashboard/templates">
                   <Image className="h-4 w-4 mr-1" />
                   Templates
                 </Link>
@@ -370,7 +379,7 @@ export default function Home() {
                 </Link>
               </Button>
               <Button variant="default" size="sm" asChild>
-                <Link href="/quizzes/new">
+                <Link href="/dashboard/quizzes/new">
                   <Zap className="h-4 w-4 mr-1" />
                   New Quiz
                 </Link>
@@ -544,7 +553,7 @@ export default function Home() {
               </CardContent>
               <CardFooter>
                 <Button variant="ghost" className="gap-1 hover:bg-primary/5 transition-colors" asChild>
-                  <Link href="/templates">
+                  <Link href="/dashboard/templates">
                     Browse Templates <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>
@@ -578,7 +587,7 @@ export default function Home() {
                 </ul>
               </CardContent>
               <CardFooter>
-                <Button variant="ghost" className="gap-1 hover:bg-primary/5 transition-colors" asChild>
+                <Button variant="ghost" className="gap-1" asChild>
                   <Link href="/calendar">
                     View Calendar <ArrowRight className="h-4 w-4" />
                   </Link>
@@ -824,12 +833,12 @@ export default function Home() {
                 <CardFooter>
                   <Button
                     className={cn(
-                      "w-full gap-2",
+                      "w-full",
                       plan.popular ? "bg-primary text-primary-foreground" : "bg-accent/20"
                     )}
                   >
                     {plan.cta}
-                    <ArrowRight className="h-4 w-4" />
+                    <ArrowRight className="h-4 w-4 ml-2" />
                   </Button>
                 </CardFooter>
               </Card>
@@ -886,14 +895,15 @@ export default function Home() {
           </div>
 
           <div>
-            <Button
-              size="lg"
-              className="h-12 px-8 bg-white text-primary hover:bg-white/90 shadow-md"
-            >
-              <Link href="/quizzes/new" className="flex items-center font-medium">
-                Get Started Now <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
-            </Button>
+            <Link href="/auth/register">
+              <Button
+                size="lg"
+                className="h-12 px-8 py-2 bg-white text-primary"
+              >
+                <Sparkles className="h-5 w-5 mr-2" />
+                Get started now
+              </Button>
+            </Link>
           </div>
 
           <div className="grid grid-cols-3 max-w-md mx-auto gap-4 pt-4">

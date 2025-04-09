@@ -80,20 +80,36 @@ export default function AuthErrorPage() {
         try {
             setLoading(true);
 
+            // Get diagnostics first for debugging
+            const diagnostics = await runAuthDiagnostics();
+
+            // Save diagnostics to localStorage for future reference
+            try {
+                localStorage.setItem('auth_diagnostics', JSON.stringify(diagnostics));
+            } catch (e) {
+                // Silent fail
+            }
+
             // Clear localStorage
             Object.keys(localStorage).forEach(key => {
-                if (key.startsWith('next-auth')) {
+                if (key.startsWith('next-auth') || key.includes('auth_redirect')) {
                     localStorage.removeItem(key);
                 }
             });
+            localStorage.removeItem('REDIRECT_LOOP_PROTECTION');
 
-            // Clear cookies
+            // Clear sessionStorage
+            Object.keys(sessionStorage).forEach(key => {
+                if (key.startsWith('next-auth') || key.includes('redirect') || key.includes('auth_')) {
+                    sessionStorage.removeItem(key);
+                }
+            });
+
+            // Clear all cookies - be more aggressive with cookie clearing
             document.cookie.split(';').forEach(cookie => {
                 const name = cookie.split('=')[0].trim();
-                if (name.includes('next-auth')) {
-                    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${window.location.hostname}`;
-                    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;`;
-                }
+                document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${window.location.hostname}`;
+                document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;`;
             });
 
             toast({
@@ -101,14 +117,79 @@ export default function AuthErrorPage() {
                 description: 'Your authentication data has been cleared. Please try logging in again.',
             });
 
+            // Set flag to block redirects during recovery
+            sessionStorage.setItem('AUTH_RECOVERY_MODE', 'true');
+
             // Redirect to login
             setTimeout(() => {
-                router.push('/auth/login');
+                window.location.href = '/auth/login?reset=true';
             }, 1000);
         } catch (error) {
             toast({
                 title: 'Error',
                 description: 'Failed to clear authentication data.',
+                variant: 'destructive',
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // More aggressive reset for stubborn auth loops
+    const forceReset = async () => {
+        try {
+            setLoading(true);
+
+            // Try to get diagnostics
+            let diagnostics = null;
+            try {
+                diagnostics = await runAuthDiagnostics();
+            } catch (e) {
+                // Silent fail, continue with reset
+            }
+
+            // Clear everything from localStorage and sessionStorage
+            try {
+                localStorage.clear();
+                sessionStorage.clear();
+            } catch (e) {
+                // Some browsers might restrict this in certain contexts
+            }
+
+            // Clear all cookies
+            document.cookie.split(';').forEach(cookie => {
+                const name = cookie.split('=')[0].trim();
+                document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;`;
+                document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${window.location.hostname}`;
+                // Also try subdomain clearing
+                const domain = window.location.hostname;
+                if (domain.includes('.')) {
+                    const rootDomain = domain.split('.').slice(-2).join('.');
+                    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=.${rootDomain}`;
+                }
+            });
+
+            // Set recovery flag
+            try {
+                sessionStorage.setItem('FORCE_AUTH_RESET', Date.now().toString());
+            } catch (e) {
+                // Silent fail
+            }
+
+            toast({
+                title: 'Auth system reset',
+                description: 'Authentication has been completely reset. You will now be redirected to the home page.',
+            });
+
+            // Redirect to home page after delay
+            setTimeout(() => {
+                window.location.href = '/?reset=true';
+            }, 1500);
+
+        } catch (error) {
+            toast({
+                title: 'Reset Failed',
+                description: 'Could not complete the reset. Try clearing your browser data manually.',
                 variant: 'destructive',
             });
         } finally {
@@ -129,7 +210,21 @@ export default function AuthErrorPage() {
                             This could be due to a corrupted authentication session or incorrectly configured auth settings.
                         </p>
 
-                        <div className="flex gap-4">
+                        {error === 'RedirectLoop' && (
+                            <div className="bg-amber-50 border border-amber-200 p-4 rounded-md">
+                                <h3 className="text-amber-800 font-medium mb-2">Redirect Loop Detected</h3>
+                                <p className="text-amber-700 text-sm mb-2">
+                                    We've detected that your authentication is caught in a redirect loop.
+                                    This usually happens when your auth session is corrupted or invalid.
+                                </p>
+                                <p className="text-amber-700 text-sm">
+                                    Try clicking "Clear Auth Data" first. If that doesn't work, use the "Force Reset" option,
+                                    which will clear all browser data for this site.
+                                </p>
+                            </div>
+                        )}
+
+                        <div className="flex flex-wrap gap-4">
                             <Button
                                 onClick={() => router.push('/auth/login')}
                                 variant="outline"
@@ -146,11 +241,29 @@ export default function AuthErrorPage() {
 
                             <Button
                                 onClick={clearAuthData}
-                                variant="destructive"
+                                variant="secondary"
                                 disabled={loading}
                             >
                                 {loading ? 'Processing...' : 'Clear Auth Data'}
                             </Button>
+
+                            <Button
+                                onClick={forceReset}
+                                variant="destructive"
+                                disabled={loading}
+                            >
+                                Force Reset
+                            </Button>
+                        </div>
+
+                        <div className="border-t pt-4 mt-4">
+                            <p className="text-sm text-muted-foreground mb-2">If problems persist after reset:</p>
+                            <ol className="text-sm text-muted-foreground list-decimal pl-5 space-y-1">
+                                <li>Try clearing cookies manually in your browser settings</li>
+                                <li>Check that you have cookies enabled</li>
+                                <li>Try using a different browser</li>
+                                <li>If using a private/incognito window, try a regular window</li>
+                            </ol>
                         </div>
                     </div>
                 </CardContent>

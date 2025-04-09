@@ -1,58 +1,63 @@
+import { UserRole } from '@/auth';
 import { hashPassword } from '@/lib/auth/password';
 import { prisma } from '@/lib/prisma';
+import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
     try {
-        const { name, email, password } = await req.json();
+        const body = await request.json();
+        const { name, email, password } = body;
 
         // Validate input
-        if (!email || !email.includes('@') || !password || password.trim().length < 8) {
-            return NextResponse.json(
-                { error: 'Invalid input - password should be at least 8 characters long.' },
-                { status: 422 }
-            );
+        if (!name || !email || !password) {
+            return NextResponse.json({
+                success: false,
+                error: 'Missing required fields'
+            }, { status: 400 });
         }
 
         // Check if user already exists
         const existingUser = await prisma.user.findUnique({
-            where: { email },
+            where: { email }
         });
 
         if (existingUser) {
-            return NextResponse.json(
-                { error: 'User already exists with this email.' },
-                { status: 422 }
-            );
+            return NextResponse.json({
+                success: false,
+                error: 'User already exists'
+            }, { status: 409 });
         }
 
-        // Hash the password
+        // Hash password
         const hashedPassword = await hashPassword(password);
 
-        // Create the user
+        // Create user with explicit ID
+        const now = new Date();
         const user = await prisma.user.create({
             data: {
+                id: randomUUID(),
                 name,
                 email,
                 password: hashedPassword,
-            },
+                role: UserRole.USER,
+                createdAt: now,
+                updatedAt: now
+            }
         });
 
-        // Return success without exposing the password
-        return NextResponse.json(
-            {
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                createdAt: user.createdAt,
-            },
-            { status: 201 }
-        );
+        // Don't return the password
+        const { password: _, ...userWithoutPassword } = user;
+
+        return NextResponse.json({
+            success: true,
+            user: userWithoutPassword
+        });
     } catch (error) {
         console.error('Registration error:', error);
-        return NextResponse.json(
-            { error: 'Could not register user. Please try again.' },
-            { status: 500 }
-        );
+        return NextResponse.json({
+            success: false,
+            error: 'Failed to create user'
+        }, { status: 500 });
     }
 } 

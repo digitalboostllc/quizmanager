@@ -34,8 +34,9 @@ export interface Quiz {
   solution: string | null;
   variables: QuizVariables | null;
   templateId: string;
-  template: Template;
+  template?: Template;
   imageUrl: string | null;
+  imagePrompt?: string | null;
   fbPostId: string | null;
   status: QuizStatus;
   language: Language;
@@ -55,6 +56,7 @@ export interface Template {
   updatedAt: Date | string;
   quizzes?: Quiz[];
   imageUrl?: string | null;
+  previewImageUrl?: string | null;
   description?: string | null;
   // Count of related records returned by Prisma's include feature
   _count?: {

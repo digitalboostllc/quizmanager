@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useLoadingDelay } from "@/contexts/LoadingDelayContext";
 import { CircleAlert, Clock, Database, RefreshCw, Search, Shield, Zap } from "lucide-react";
 import { useState } from "react";
 
@@ -24,6 +25,9 @@ type QueryResult = {
 export default function DiagnosticsPage() {
     const [results, setResults] = useState<QueryResult[]>([]);
     const [isRunning, setIsRunning] = useState(false);
+    const loadingDelayContext = useLoadingDelay();
+    const [testState, setTestState] = useState<string>("Not tested");
+    const [isLoading, setIsLoading] = useState(false);
 
     // Function to run a test query and measure its performance
     const testQuery = async (endpoint: string, name: string, queryDetails?: string) => {
@@ -152,6 +156,25 @@ export default function DiagnosticsPage() {
             case "success": return "success";
             case "error": return "destructive";
             case "loading": return "default";
+        }
+    };
+
+    const runTest = async () => {
+        setIsLoading(true);
+        setTestState("Testing...");
+        try {
+            // Create a test promise
+            const testPromise = new Promise<string>(resolve => {
+                setTimeout(() => resolve("Context working correctly!"), 100);
+            });
+
+            // Use the simulateLoading function from context
+            const result = await loadingDelayContext.simulateLoading(testPromise);
+            setTestState(result);
+        } catch (error) {
+            setTestState(`Error: ${error instanceof Error ? error.message : String(error)}`);
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -332,6 +355,40 @@ export default function DiagnosticsPage() {
                         </Card>
                     </TabsContent>
                 </Tabs>
+            </div>
+
+            <Card className="mt-6">
+                <CardHeader>
+                    <CardTitle>Loading Delay Context Test</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div>
+                        <strong>Context Available:</strong> {loadingDelayContext ? "Yes" : "No"}
+                    </div>
+                    <div>
+                        <strong>simulateLoading Function:</strong> {typeof loadingDelayContext?.simulateLoading === 'function' ? "Available" : "Not available"}
+                    </div>
+                    <div>
+                        <strong>Test Result:</strong> {testState}
+                    </div>
+                    <Button
+                        onClick={runTest}
+                        disabled={isLoading}
+                    >
+                        {isLoading ? "Testing..." : "Run Test"}
+                    </Button>
+                </CardContent>
+            </Card>
+
+            <div className="text-sm text-muted-foreground mt-6">
+                <p className="mb-2">Visit these routes to test specific pages:</p>
+                <ul className="list-disc pl-5 space-y-1">
+                    <li><a href="/dashboard/settings" className="text-blue-500 hover:underline">/dashboard/settings</a></li>
+                    <li><a href="/dashboard/settings/facebook" className="text-blue-500 hover:underline">/dashboard/settings/facebook</a></li>
+                    <li><a href="/dashboard/settings/calendar" className="text-blue-500 hover:underline">/dashboard/settings/calendar</a></li>
+                    <li><a href="/dashboard/settings/auto-schedule" className="text-blue-500 hover:underline">/dashboard/settings/auto-schedule</a></li>
+                    <li><a href="/dashboard/settings/notifications" className="text-blue-500 hover:underline">/dashboard/settings/notifications</a></li>
+                </ul>
             </div>
         </div>
     );

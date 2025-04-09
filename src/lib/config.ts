@@ -10,9 +10,9 @@ export const ROUTES = {
 } as const;
 
 export const API_ENDPOINTS = {
-  QUIZZES: '/quizzes',
-  TEMPLATES: '/templates',
-  FACEBOOK: '/facebook',
+  QUIZZES: '/api/quizzes',
+  TEMPLATES: '/api/templates',
+  FACEBOOK: '/api/facebook',
 } as const;
 
 export const QUIZ_STATUSES = {

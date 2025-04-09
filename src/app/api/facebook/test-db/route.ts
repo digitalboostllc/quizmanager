@@ -5,6 +5,9 @@ import { ApiError } from '@/services/api/errors/ApiError';
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
+// Set runtime to Node.js since this file uses crypto module indirectly via decrypt
+export const runtime = 'nodejs';
+
 // Cache implementation with dynamic TTL
 const CACHE_TTL = {
   settings: 5 * 60 * 1000,  // 5 minutes for settings

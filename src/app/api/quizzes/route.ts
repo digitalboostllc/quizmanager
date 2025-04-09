@@ -1,9 +1,10 @@
 import { trackPerformance } from '@/lib/monitoring';
 import { prisma } from '@/lib/prisma';
-import { createQuizSchema, paginationParamsSchema, searchQuerySchema, validateQueryParams } from '@/lib/validations/api';
+import { paginationParamsSchema, searchQuerySchema, validateQueryParams } from '@/lib/validations/api';
 import { ApiError } from '@/services/api/errors/ApiError';
 import { Prisma, QuizStatus, QuizType } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from "zod";
 
 // Enhanced cache implementation with dynamic TTL based on query complexity
 const CACHE_TTL = {
@@ -114,25 +115,170 @@ function isConnectionError(error: any): boolean {
   return connectionErrorPatterns.some(pattern => pattern.test(errorMsg));
 }
 
+// Helper to extract content items from a quiz for tracking
+function extractContentFromQuiz(quizData: any, quizType: QuizType): {
+  contentType: string;
+  value: string;
+  format: string;
+  metadata?: Record<string, any>;
+}[] {
+  const contentItems: {
+    contentType: string;
+    value: string;
+    format: string;
+    metadata?: Record<string, any>;
+  }[] = [];
+
+  // Handle different quiz types
+  switch (quizType) {
+    case QuizType.WORDLE:
+      // Extract answer word if it exists and is a single word
+      if (quizData.answer && typeof quizData.answer === 'string') {
+        const answer = quizData.answer.trim().toUpperCase();
+        if (answer.split(/\s+/).length === 1) {
+          contentItems.push({
+            contentType: 'WORD',
+            value: answer,
+            format: quizData.language || 'en', // Use the quiz language or default to English
+            metadata: { usage: 'ANSWER' }
+          });
+        }
+      }
+
+      // Extract words from wordGrid for WORDLE quizzes
+      if (quizData.variables?.wordGrid) {
+        const grid = quizData.variables.wordGrid.toString();
+        const gridWords = grid.split('\n').map((line: string) => line.trim())
+          .filter((line: string) => line.length === 5 && /^[A-Z]+$/.test(line));
+
+        gridWords.forEach((word: string) => {
+          contentItems.push({
+            contentType: 'WORD',
+            value: word,
+            format: quizData.language || 'en',
+            metadata: { usage: 'GRID_WORD' }
+          });
+        });
+      }
+      break;
+
+    case QuizType.NUMBER_SEQUENCE:
+      // Extract number sequence if present
+      if (quizData.answer && typeof quizData.answer === 'string') {
+        contentItems.push({
+          contentType: 'NUMBER_SEQUENCE',
+          value: quizData.answer.trim(),
+          format: 'SEQUENCE',
+          metadata: { usage: 'ANSWER' }
+        });
+      }
+      break;
+
+    case QuizType.RHYME_TIME:
+      // Extract rhyme pairs if present
+      if (quizData.answer && typeof quizData.answer === 'string') {
+        const answerText = quizData.answer.trim().toUpperCase();
+        const rhymePairs = answerText.split(',').map((pair: string) => pair.trim());
+
+        if (rhymePairs.length > 0) {
+          contentItems.push({
+            contentType: 'RHYME',
+            value: rhymePairs.join(':'),
+            format: quizData.language || 'en',
+            metadata: { usage: 'RHYME_PAIRS', pairs: rhymePairs }
+          });
+        }
+      }
+      break;
+
+    case QuizType.CONCEPT_CONNECTION:
+      // Extract concept theme
+      if (quizData.answer && typeof quizData.answer === 'string') {
+        const theme = quizData.answer.trim().toUpperCase();
+        // Try to extract concepts from variables or solution
+        let concepts: string[] = [];
+
+        if (quizData.variables?.conceptsGrid) {
+          // Parse HTML to extract concepts
+          const conceptsHtml = quizData.variables.conceptsGrid.toString();
+          const conceptMatches = conceptsHtml.match(/<span class="concept-text">([^<]+)<\/span>/g);
+          if (conceptMatches) {
+            concepts = conceptMatches
+              .map((match: string) => {
+                const textMatch = match.match(/<span class="concept-text">([^<]+)<\/span>/);
+                return textMatch ? textMatch[1].trim().toUpperCase() : null;
+              })
+              .filter(Boolean) as string[];
+          }
+        }
+
+        if (concepts.length > 0) {
+          contentItems.push({
+            contentType: 'CONCEPT',
+            value: `${theme}:${concepts.join(',')}`,
+            format: quizData.language || 'en',
+            metadata: {
+              theme: theme,
+              concepts: concepts,
+              usage: 'CONCEPT_SET'
+            }
+          });
+        }
+      }
+      break;
+
+    default:
+      // For other quiz types, still track words
+      if (quizData.answer && typeof quizData.answer === 'string') {
+        const answer = quizData.answer.trim().toUpperCase();
+        if (answer.split(/\s+/).length === 1) {
+          contentItems.push({
+            contentType: 'WORD',
+            value: answer,
+            format: quizData.language || 'en',
+            metadata: { usage: 'ANSWER' }
+          });
+        }
+      }
+  }
+
+  return contentItems;
+}
+
+// Define the schema for quiz creation
+const quizCreateSchema = z.object({
+  templateId: z.string(),
+  variables: z.record(z.string(), z.any()),
+  language: z.string(),
+  answer: z.string().optional(),
+  solution: z.string().optional(),
+  title: z.string().optional(),
+});
+
 export async function GET(request: NextRequest) {
+  console.log(`🔍 API: Quizzes GET request received at ${new Date().toISOString()}`);
+  console.log(`🔍 API: URL: ${request.url}`);
   const startTime = Date.now();
   const path = request.nextUrl.pathname;
   const method = request.method;
 
   // Set response headers for caching
   const headers = {
-    'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+    'Cache-Control': 'no-cache, no-store, must-revalidate', // Disable caching for troubleshooting
   };
 
   try {
     const { searchParams } = new URL(request.url);
+    console.log(`🔍 API: Query params: ${Array.from(searchParams.entries()).map(([k, v]) => `${k}=${v}`).join(', ')}`);
 
     // Validate query parameters
     const { limit, cursor } = await validateQueryParams(paginationParamsSchema, searchParams);
     const { query, type, status } = await validateQueryParams(searchQuerySchema, searchParams);
+    console.log(`🔍 API: Validated params: limit=${limit}, cursor=${cursor}, query=${query}, type=${type}, status=${status}`);
 
-    // Don't use cache for cursor-based pagination requests after the first page
+    // Don't use cache for now (for debugging)
     let cacheHit = false;
+    /* Disable cache during debugging
     if (!cursor) {
       const cacheKey = buildCacheKey(request.url, searchParams);
       if (isCacheValid(cacheKey)) {
@@ -143,6 +289,7 @@ export async function GET(request: NextRequest) {
         return cachedResponse;
       }
     }
+    */
 
     // Build where conditions
     const where: Prisma.QuizWhereInput = {};
@@ -155,8 +302,12 @@ export async function GET(request: NextRequest) {
     }
 
     if (type) {
-      where.template = {
-        quizType: type
+      where.templateId = {
+        // Match quizzes where templateId is in the list of templates with this quiz type
+        in: await prisma.template.findMany({
+          where: { quizType: type },
+          select: { id: true }
+        }).then(templates => templates.map(t => t.id))
       };
     }
 
@@ -164,44 +315,92 @@ export async function GET(request: NextRequest) {
       where.status = status;
     }
 
+    console.log(`🔍 API: Query conditions:`, JSON.stringify(where));
+
     // Optimize field selection (only select what's actually needed)
     const SELECT_FIELDS = {
       id: true,
       title: true,
       status: true,
       createdAt: true,
+      updatedAt: true,
       imageUrl: true,
-      template: {
-        select: {
-          id: true,
-          quizType: true,
-        },
-      },
-      _count: {
-        select: {
-          scheduledPost: true,
-        },
-      },
+      templateId: true,
+      language: true,
+      userId: true,
+      batchId: true
     };
 
     // Set up cursor for pagination
     const cursorObj = cursor ? { id: cursor } : undefined;
+    console.log(`🔍 API: Cursor object:`, cursorObj);
 
+    console.log(`🔍 API: Testing Prisma connection before query...`);
+    // Test connection first
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      console.log(`✅ API: Prisma connection is active`);
+    } catch (connError) {
+      console.error(`❌ API: Prisma connection test failed:`, connError);
+      // Attempt reconnection
+      try {
+        await prisma.$disconnect();
+        await prisma.$connect();
+        console.log(`✅ API: Prisma reconnection successful`);
+      } catch (reconnectError) {
+        console.error(`❌ API: Prisma reconnection failed:`, reconnectError);
+        throw new Error('Database connection failed');
+      }
+    }
+
+    console.log(`🔍 API: About to execute Prisma query...`);
     // Execute the query with connection retries
     const quizzes = await withConnectionRetry(async () => {
-      return prisma.quiz.findMany({
+      const result = await prisma.quiz.findMany({
         where,
         take: limit,
         ...(cursorObj && { cursor: cursorObj, skip: 1 }), // Skip the cursor item
         orderBy: { createdAt: 'desc' },
         select: SELECT_FIELDS,
       });
+      console.log(`🔍 API: Raw query result count: ${result.length}`);
+
+      // Get unique template IDs from the quizzes
+      const templateIds = [...new Set(result.map(quiz => quiz.templateId))];
+
+      // Fetch all needed templates in a single query
+      const templates = await prisma.template.findMany({
+        where: {
+          id: {
+            in: templateIds
+          }
+        },
+        select: {
+          id: true,
+          name: true,
+          quizType: true,
+        }
+      });
+
+      // Create a lookup map for quick template access
+      const templateMap = templates.reduce((map, template) => {
+        map[template.id] = template;
+        return map;
+      }, {} as Record<string, { id: string, name: string, quizType: string }>);
+
+      // Combine quiz data with template data
+      return result.map(quiz => ({
+        ...quiz,
+        template: templateMap[quiz.templateId] || null
+      }));
     });
+    console.log(`🔍 API: Query returned ${quizzes.length} quizzes`);
 
     // Determine if there are more items
     const lastItem = quizzes.length > 0 ? quizzes[quizzes.length - 1] : null;
     const nextCursor = lastItem?.id;
     const hasMore = quizzes.length === limit;
+    console.log(`🔍 API: Pagination details: hasMore=${hasMore}, nextCursor=${nextCursor}`);
 
     // Format the response data
     const responseData = {
@@ -213,7 +412,8 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    // Cache the results (only first page)
+    // Cache the results (only first page) - commented out for debugging
+    /*
     if (!cursor) {
       const cacheKey = buildCacheKey(request.url, searchParams);
       // Use appropriate TTL based on query type
@@ -225,12 +425,25 @@ export async function GET(request: NextRequest) {
         ttl
       };
     }
+    */
 
-    const apiResponse = NextResponse.json(responseData, { headers });
-    trackPerformance(apiResponse, path, method, startTime, cacheHit);
-    return apiResponse;
+    console.log(`🔍 API: Sending response with ${quizzes.length} quizzes`);
+    try {
+      const apiResponse = NextResponse.json(responseData, { headers });
+      trackPerformance(apiResponse, path, method, startTime, cacheHit);
+      return apiResponse;
+    } catch (err) {
+      // If we have a problem creating the response, log it but don't fail
+      console.error("Error creating response:", err);
+      trackPerformance(null, path, method, startTime, cacheHit, "Error creating response");
+      // Create a simple fallback response
+      return NextResponse.json({
+        data: [],
+        pagination: { hasMore: false, nextCursor: null, limit }
+      }, { status: 500 });
+    }
   } catch (error) {
-    console.error("Error in GET /quizzes:", error);
+    console.error("🔴 Error in GET /quizzes:", error);
 
     // Enhanced error handling with more detailed error responses
     let statusCode = 500;
@@ -282,73 +495,36 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Validate request body
-    const validatedData = await createQuizSchema.parseAsync(body);
+    // Validate the request body
+    const validatedData = quizCreateSchema.parse(body);
 
-    // Create quiz
+    // Create the quiz in the database
     const quiz = await prisma.quiz.create({
       data: {
-        title: validatedData.title,
-        answer: validatedData.answer,
-        solution: validatedData.solution,
-        variables: validatedData.variables,
+        id: crypto.randomUUID(),
         templateId: validatedData.templateId,
-        status: QuizStatus.DRAFT,
+        variables: validatedData.variables,
         language: validatedData.language,
-      },
-      include: {
-        template: {
-          select: {
-            id: true,
-            name: true,
-            quizType: true,
-          },
-        },
+        answer: validatedData.answer || "",
+        solution: validatedData.solution || "",
+        title: validatedData.title || validatedData.variables.title || "Untitled Quiz",
+        status: QuizStatus.DRAFT,
+        updatedAt: new Date()
       },
     });
 
-    const apiResponse = NextResponse.json(quiz);
-    trackPerformance(apiResponse, path, method, startTime);
-    return apiResponse;
+    return NextResponse.json(quiz);
   } catch (error) {
-    console.error('Error creating quiz:', error);
-
-    // Enhanced error handling with more detailed error responses
-    let statusCode = 500;
-    let errorMessage = 'Internal server error';
-    let errorCode = 'INTERNAL_SERVER_ERROR';
-
-    if (error instanceof ApiError) {
-      statusCode = error.statusCode;
-      errorMessage = error.message;
-      errorCode = error.code;
-    } else if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      statusCode = 503;
-      errorMessage = 'Database operation failed';
-      errorCode = error.code;
-    } else if (error instanceof Prisma.PrismaClientInitializationError) {
-      statusCode = 503;
-      errorMessage = 'Database connection failed';
-      errorCode = 'DATABASE_CONNECTION_ERROR';
-    } else if (isConnectionError(error)) {
-      statusCode = 503;
-      errorMessage = 'Database connection issues, please try again later';
-      errorCode = 'CONNECTION_ERROR';
-    } else if (error instanceof Error) {
-      statusCode = 400;
-      errorMessage = error.message;
-      errorCode = 'VALIDATION_ERROR';
+    console.error("Error creating quiz:", error);
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: "Invalid request data", details: error.errors },
+        { status: 400 }
+      );
     }
-
-    const errorResponse = NextResponse.json(
-      {
-        error: errorMessage,
-        code: errorCode,
-      },
-      { status: statusCode }
+    return NextResponse.json(
+      { error: "Failed to create quiz" },
+      { status: 500 }
     );
-
-    trackPerformance(errorResponse, path, method, startTime, false, errorMessage);
-    return errorResponse;
   }
 } 

@@ -1,7 +1,7 @@
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { NextAuthOptions } from "next-auth";
+import { getServerSession, NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 
@@ -99,4 +99,23 @@ export const authOptions: NextAuthOptions = {
     },
     secret: process.env.NEXTAUTH_SECRET,
     debug: process.env.NODE_ENV === "development",
-}; 
+};
+
+/**
+ * Helper to get the session server-side
+ */
+export const auth = async () => {
+    return await getServerSession(authOptions);
+}
+
+/**
+ * Get the current user from the session
+ * @returns The current user or null if not authenticated
+ */
+export async function getSessionUser() {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+        return null;
+    }
+    return session.user;
+} 

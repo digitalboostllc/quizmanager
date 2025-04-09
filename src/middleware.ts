@@ -1,280 +1,161 @@
 import { getToken } from 'next-auth/jwt';
-import type { NextRequest } from 'next/server';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
-// ======================================================================
-// TEMPORARY: AUTHENTICATION DISABLED FOR DEVELOPMENT
-// To re-enable auth, change this to false and restart the application
-// ======================================================================
-const DISABLE_AUTH = true;
+// Configuration for protected routes
+const authConfig = {
+    // Routes that require authentication
+    protectedRoutes: [
+        '/dashboard',
+        '/profile',
+        '/settings',
+        '/quizzes/edit',
+        '/quizzes/my',
+    ],
 
-// Routes that require authentication - using more specific paths
-const protectedRoutes = [
-    '/profile', // Main profile page
-    '/profile/edit', // Edit profile
-    '/profile/change-password', // Change password
-    '/settings', // Main settings page and all sub-routes
-    '/quizzes/new', // Create new quiz
-    '/quizzes/edit', // Edit existing quiz
-    '/quizzes/my', // My quizzes
-];
+    // Routes that require admin privileges
+    adminRoutes: [
+        '/dashboard/admin',
+    ],
 
-// Routes that should redirect to dashboard if already authenticated
-const authRoutes = [
-    '/auth/login',
-    '/auth/register',
-];
+    // Routes that should redirect to dashboard if already authenticated
+    authRoutes: [
+        '/auth/login',
+        '/auth/register',
+    ],
 
-// Routes that should never redirect or check auth
-const noAuthCheckRoutes = [
-    '/auth/logout',
-    '/auth/error',
-    '/api/auth/session-check',
-    '/api/auth/check-auth',
-    '/api/auth/csrf',
-    '/api/auth/session',
-    '/api/smart-generator',
-    '/api/templates',
-];
-
-// Routes that are partially accessible without login
-// These routes show limited content to non-authenticated users
-const partialAccessRoutes = [
-    '/dictionary',
-    '/templates',
-    '/quizzes',
-    '/calendar',
-];
-
-// Additional safe paths that should never redirect
-const safePaths = [
-    '/',
-    '/about',
-    '/contact',
-    '/terms',
-    '/privacy',
-    '/help',
-    '/faq',
-];
-
-// Rate limiting configuration
-const RATE_LIMIT = {
-    windowMs: 60 * 1000, // 1 minute
-    max: 100, // Limit each IP to 100 requests per windowMs
-    message: 'Too many requests from this IP, please try again later.',
-};
-
-// In-memory store for rate limiting
-const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
-
-// Helper to check if a request should be rate limited
-function isRateLimited(ip: string): boolean {
-    const now = Date.now();
-    const record = rateLimitStore.get(ip);
-
-    if (!record) {
-        rateLimitStore.set(ip, {
-            count: 1,
-            resetTime: now + RATE_LIMIT.windowMs,
-        });
-        return false;
-    }
-
-    if (now > record.resetTime) {
-        rateLimitStore.set(ip, {
-            count: 1,
-            resetTime: now + RATE_LIMIT.windowMs,
-        });
-        return false;
-    }
-
-    if (record.count >= RATE_LIMIT.max) {
-        return true;
-    }
-
-    record.count++;
-    return false;
-}
-
-// Helper to get client IP
-function getClientIp(request: NextRequest): string {
-    const forwardedFor = request.headers.get('x-forwarded-for');
-    if (forwardedFor) {
-        return forwardedFor.split(',')[0].trim();
-    }
-    // Use the remote address from the request headers
-    return request.headers.get('x-real-ip') || 'unknown';
-}
-
-// Helper to detect redirect loops
-const detectRedirectLoop = (request: NextRequest): boolean => {
-    // Check for a special query parameter that counts redirects
-    const redirectCount = parseInt(request.nextUrl.searchParams.get('_authRedirectCount') || '0');
-
-    // If we've redirected more than 3 times in a row, we're probably in a loop
-    return redirectCount >= 3;
+    // Routes that should never redirect or check auth (public API endpoints, etc.)
+    publicRoutes: [
+        '/',
+        '/about',
+        '/contact',
+        '/terms',
+        '/privacy',
+        '/help',
+        '/faq',
+        '/auth/error',
+        '/auth/logout',
+        '/auth/test',
+        '/dashboard/bypass',
+        '/dashboard/bypass-direct',
+        '/api/auth/session-check',
+        '/api/auth/check-auth',
+        '/api/auth/create-token',
+        '/api/auth/diagnostic',
+        '/api/auth/test-login',
+        '/api/auth/session-direct',
+        '/api/auth/debug-session',
+        '/api/auth/csrf',
+        '/api/auth/session',
+        '/api/auth/providers',
+        '/api/smart-generator',
+        '/api/templates',
+    ],
 };
 
 /**
- * Check if a path matches a route pattern
+ * Check if a path matches any of the routes in the array
  */
-const pathMatchesRoute = (path: string, routes: string[]): boolean => {
-    // Check for exact match (path equals route)
-    if (routes.includes(path)) return true;
+function matchesRoute(pathname: string, routes: string[]): boolean {
+    return routes.some(route =>
+        pathname === route || pathname.startsWith(`${route}/`)
+    );
+}
 
-    // Check for prefix match (path starts with route)
-    for (const route of routes) {
-        // Handle trailing slashes consistently by removing them for comparison
-        const normalizedPath = path.endsWith('/') ? path.slice(0, -1) : path;
-        const normalizedRoute = route.endsWith('/') ? route.slice(0, -1) : route;
+/**
+ * Helper to check if a path requires authentication
+ */
+function requiresAuth(pathname: string): boolean {
+    return matchesRoute(pathname, authConfig.protectedRoutes);
+}
 
-        if (normalizedPath === normalizedRoute) return true;
-        if (normalizedPath.startsWith(normalizedRoute + '/')) return true;
-    }
+/**
+ * Helper to check if a path requires admin privileges
+ */
+function requiresAdmin(pathname: string): boolean {
+    return matchesRoute(pathname, authConfig.adminRoutes);
+}
 
-    return false;
-};
+/**
+ * Helper to check if a path is an auth page
+ */
+function isAuthPage(pathname: string): boolean {
+    return matchesRoute(pathname, authConfig.authRoutes);
+}
 
+/**
+ * Helper to check if a path is a public page
+ */
+function isPublicPage(pathname: string): boolean {
+    return matchesRoute(pathname, authConfig.publicRoutes);
+}
+
+/**
+ * Helper to check if a user has admin privileges
+ */
+function isAdmin(role: string | undefined): boolean {
+    return role === 'ADMIN' || role === 'SUPER_ADMIN';
+}
+
+/**
+ * Middleware for Next.js that handles authentication and authorization checks.
+ */
 export async function middleware(request: NextRequest) {
-    // If auth is disabled, allow all requests through
-    if (DISABLE_AUTH) {
-        return NextResponse.next();
-    }
-
     const { pathname } = request.nextUrl;
 
-    // If accessing an API route, static asset, or favicon, proceed normally
+    // Always allow static assets and public routes
     if (
-        pathname.startsWith('/api') ||
         pathname.startsWith('/_next') ||
-        pathname.includes('favicon') ||
+        pathname.startsWith('/images/') ||
+        pathname.startsWith('/fonts/') ||
         pathname.includes('.') ||
-        safePaths.includes(pathname)
+        isPublicPage(pathname)
     ) {
-        // Only apply rate limiting to API routes
-        if (!pathname.startsWith('/api/')) {
-            return NextResponse.next();
-        }
-
-        const ip = getClientIp(request);
-
-        // Check rate limit
-        if (isRateLimited(ip)) {
-            return NextResponse.json(
-                {
-                    error: RATE_LIMIT.message,
-                    code: 'RATE_LIMIT_EXCEEDED',
-                },
-                {
-                    status: 429,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Retry-After': '60',
-                    },
-                }
-            );
-        }
-
-        // Add rate limit headers to response
-        const response = NextResponse.next();
-        const record = rateLimitStore.get(ip);
-        if (record) {
-            response.headers.set('X-RateLimit-Limit', RATE_LIMIT.max.toString());
-            response.headers.set('X-RateLimit-Remaining', (RATE_LIMIT.max - record.count).toString());
-            response.headers.set('X-RateLimit-Reset', record.resetTime.toString());
-        }
-
-        return response;
-    }
-
-    // Never check auth for specific routes to avoid loops
-    if (pathMatchesRoute(pathname, noAuthCheckRoutes)) {
-        return NextResponse.next();
-    }
-
-    // Check if the route is protected or an auth route
-    const isProtectedRoute = pathMatchesRoute(pathname, protectedRoutes);
-    const isAuthRoute = pathMatchesRoute(pathname, authRoutes);
-    const isPartialAccessRoute = pathMatchesRoute(pathname, partialAccessRoutes);
-
-    // If it's not a protected route, auth route, or partial access route, proceed normally
-    if (!isProtectedRoute && !isAuthRoute && !isPartialAccessRoute) {
-        return NextResponse.next();
-    }
-
-    // Check for potential redirect loops before proceeding
-    const inRedirectLoop = detectRedirectLoop(request);
-    if (inRedirectLoop) {
-        // Force access to break the loop and redirect to error page with diagnostics
-        if (isProtectedRoute) {
-            // Redirect to error page instead of login
-            const errorUrl = new URL('/auth/error', request.url);
-            errorUrl.searchParams.set('error', 'RedirectLoop');
-            errorUrl.searchParams.set('path', pathname);
-            return NextResponse.redirect(errorUrl);
-        }
-
-        // For non-protected routes in a loop, just allow access
         return NextResponse.next();
     }
 
     try {
-        // Get the token from the request
+        // Get user token
         const token = await getToken({
             req: request,
             secret: process.env.NEXTAUTH_SECRET,
         });
 
+        // If user is on an auth page but already authenticated, redirect to dashboard
+        if (isAuthPage(pathname) && token) {
+            return NextResponse.redirect(new URL('/dashboard', request.url));
+        }
+
         // For protected routes, require authentication
-        if (isProtectedRoute) {
+        if (requiresAuth(pathname)) {
             if (!token) {
-                // Create login URL with callback and increment redirect counter
-                const loginUrl = new URL('/auth/login', request.url);
-                loginUrl.searchParams.set('callbackUrl', encodeURI(pathname));
-
-                // Add redirect counter
-                const redirectCount = parseInt(request.nextUrl.searchParams.get('_authRedirectCount') || '0');
-                loginUrl.searchParams.set('_authRedirectCount', (redirectCount + 1).toString());
-
-                return NextResponse.redirect(loginUrl);
+                // Save the current URL to redirect back after login
+                const callbackUrl = encodeURIComponent(request.nextUrl.pathname);
+                return NextResponse.redirect(new URL(`/auth/login?callbackUrl=${callbackUrl}`, request.url));
             }
 
-            // Create a clean URL without the redirect counter
-            const cleanUrl = new URL(request.url);
-            cleanUrl.searchParams.delete('_authRedirectCount');
+            // For admin routes, require admin role
+            if (requiresAdmin(pathname)) {
+                // Make sure token.role is a string value for comparison
+                const userRole = token.role as string;
 
-            // Only redirect if we need to clean the URL
-            if (request.nextUrl.searchParams.has('_authRedirectCount')) {
-                return NextResponse.redirect(cleanUrl);
+                // Check if user has admin role
+                if (!isAdmin(userRole)) {
+                    return NextResponse.redirect(new URL('/dashboard', request.url));
+                }
             }
-
-            return NextResponse.next();
         }
 
-        // For auth routes, redirect to profile if already authenticated
-        if (isAuthRoute && token) {
-            return NextResponse.redirect(new URL('/profile', request.url));
-        }
-
-        // For partial access routes, allow access
+        // All checks passed, proceed to the requested page
         return NextResponse.next();
     } catch (error) {
-        console.error('[Auth middleware] Error:', error);
+        console.error('[Auth Middleware Error]', error);
 
-        // On error, still allow access to avoid blocking users
+        // On error, still allow access to avoid blocking users completely
+        // but redirect to error page for protected routes
+        if (requiresAuth(pathname)) {
+            return NextResponse.redirect(new URL('/auth/error?error=ServerError', request.url));
+        }
+
         return NextResponse.next();
     }
-}
-
-export const config = {
-    matcher: [
-        /*
-         * Match all request paths except for the ones starting with:
-         * - _next/static (static files)
-         * - _next/image (image optimization files)
-         * - favicon.ico (favicon file)
-         * - public folder
-         */
-        '/((?!_next/static|_next/image|favicon.ico|public).*)',
-    ],
-}; 
+} 

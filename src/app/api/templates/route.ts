@@ -1,7 +1,6 @@
-import { trackPerformance } from '@/lib/monitoring';
 import { prisma } from "@/lib/prisma";
-import { ApiError } from "@/services/api/errors/ApiError";
 import { Prisma, QuizType } from "@prisma/client";
+import { getServerSession } from "next-auth/next";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -114,6 +113,27 @@ export async function POST(request: Request) {
     const body = await request.json();
     const validatedData = createTemplateSchema.parse(body);
 
+    // Get the current user from the session
+    const session = await getServerSession();
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    // Find the user
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email }
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "User not found" },
+        { status: 404 }
+      );
+    }
+
     const template = await withConnectionRetry(() =>
       prisma.template.create({
         data: {
@@ -122,6 +142,8 @@ export async function POST(request: Request) {
           css: validatedData.css,
           quizType: validatedData.quizType,
           variables: validatedData.variables,
+          userId: user.id, // Associate with the current user
+          isPublic: false, // Default to private
         },
       })
     );
@@ -150,155 +172,32 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET(request: Request) {
-  const startTime = Date.now();
-  const requestPath = new URL(request.url).pathname;
-  const method = request.method;
-
-  // Set response headers for caching
-  const headers = {
-    'Cache-Control': 'public, s-maxage=1800, stale-while-revalidate=3600', // 30 minutes, stale for 1 hour
-  };
-
+export async function GET() {
   try {
-    // Parse query parameters
-    const { searchParams } = new URL(request.url);
-    const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50); // Cap at 50
-    const quizType = searchParams.get('type') as QuizType | null;
-    const search = searchParams.get('search')?.trim() || '';
-    const cursor = searchParams.get('cursor') || undefined;
-
-    // Don't use cache for cursor-based pagination requests after the first page
-    let cacheHit = false;
-    if (!cursor) {
-      const cacheKey = buildCacheKey(request.url, searchParams);
-      if (isCacheValid(cacheKey)) {
-        console.log(`Cache hit for ${cacheKey}`);
-        const cachedResponse = NextResponse.json(cache[cacheKey].data, { headers });
-        trackPerformance(cachedResponse, requestPath, method, startTime, true);
-        return cachedResponse;
+    console.log('Fetching templates from database...');
+    const templates = await prisma.template.findMany({
+      select: {
+        id: true,
+        name: true,
+        quizType: true,
+        imageUrl: true,
+        previewImageUrl: true,
+        description: true,
+        createdAt: true,
+        updatedAt: true,
+        userId: true,
+        isPublic: true,
       }
-    }
-
-    // Build where conditions
-    const where: Prisma.TemplateWhereInput = {};
-
-    if (quizType) {
-      where.quizType = quizType;
-    }
-
-    if (search) {
-      where.name = {
-        contains: search,
-        mode: 'insensitive'
-      };
-    }
-
-    // Optimize field selection (only select what's actually needed)
-    const SELECT_FIELDS = {
-      id: true,
-      name: true,
-      quizType: true,
-      imageUrl: true,
-      description: true,
-      createdAt: true,
-      updatedAt: true,
-      _count: {
-        select: {
-          quizzes: true,
-        },
-      },
-    };
-
-    // Set up cursor for pagination
-    const cursorObj = cursor ? { id: cursor } : undefined;
-
-    // Fix the orderBy to use proper Prisma types
-    const orderBy: Prisma.TemplateOrderByWithRelationInput[] = quizType
-      ? [
-        { quizType: 'asc' as Prisma.SortOrder },
-        { createdAt: 'desc' as Prisma.SortOrder }
-      ]
-      : [{ createdAt: 'desc' as Prisma.SortOrder }];
-
-    // Execute the query with connection retries
-    const templates = await withConnectionRetry(async () => {
-      return prisma.template.findMany({
-        where,
-        take: limit,
-        ...(cursorObj && { cursor: { id: cursor }, skip: 1 }),
-        orderBy,
-        select: SELECT_FIELDS,
-      });
     });
+    console.log('Found templates:', templates);
+    console.log('Template count:', templates.length);
 
-    // Get total count for first page only
-    let total = undefined;
-    if (!cursor) {
-      total = await withConnectionRetry(() =>
-        prisma.template.count({ where })
-      );
-    }
-
-    // Determine if there are more items
-    const lastItem = templates[templates.length - 1];
-    const nextCursor = templates.length === limit ? lastItem?.id : undefined;
-    const hasMore = templates.length === limit;
-
-    // Format the response
-    const response = {
-      data: templates,
-      pagination: {
-        hasMore,
-        nextCursor,
-        limit,
-        total
-      },
-    };
-
-    // Cache the results (only first page)
-    if (!cursor) {
-      const cacheKey = buildCacheKey(request.url, searchParams);
-      // Use appropriate TTL based on query type
-      const ttl = search ? CACHE_TTL.search : CACHE_TTL.default;
-
-      cache[cacheKey] = {
-        data: response,
-        timestamp: Date.now(),
-        ttl
-      };
-    }
-
-    const apiResponse = NextResponse.json(response, { headers });
-    trackPerformance(apiResponse, requestPath, method, startTime, cacheHit);
-    return apiResponse;
-
+    return NextResponse.json(templates);
   } catch (error) {
-    console.error("Error fetching templates:", error);
-
-    let statusCode = 500;
-    let errorMessage = "Failed to fetch templates";
-    let errorCode = "INTERNAL_SERVER_ERROR";
-
-    if (error instanceof ApiError) {
-      statusCode = error.statusCode;
-      errorMessage = error.message;
-      errorCode = error.code;
-    } else if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      statusCode = 400;
-      errorMessage = "Invalid query parameters";
-      errorCode = error.code;
-    } else if (isConnectionError(error)) {
-      statusCode = 503;
-      errorMessage = "Database connection issues";
-      errorCode = "CONNECTION_ERROR";
-    }
-
-    const errorResponse = NextResponse.json(
-      { error: errorMessage, code: errorCode },
-      { status: statusCode, headers }
+    console.error('Error fetching templates:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch templates' },
+      { status: 500 }
     );
-    trackPerformance(errorResponse, requestPath, method, startTime, false, errorMessage);
-    return errorResponse;
   }
 } 

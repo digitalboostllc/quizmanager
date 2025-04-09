@@ -14,13 +14,13 @@ const nextConfig = {
     // your project has TypeScript errors.
     ignoreBuildErrors: true,
   },
+  // Moved from experimental to root level
+  serverExternalPackages: ['@prisma/client', 'prisma'],
   experimental: {
-    serverComponentsExternalPackages: ['@prisma/client', 'prisma'],
     serverActions: {
       bodySizeLimit: '2mb',
     },
-    // Enable server-side instrumentation
-    instrumentationHook: true,
+    // instrumentationHook removed as it's available by default
   },
   // Configure longer timeouts for API routes
   serverRuntimeConfig: {

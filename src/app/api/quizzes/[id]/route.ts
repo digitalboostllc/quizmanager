@@ -130,17 +130,9 @@ export async function GET(
       variables: true,
       status: true,
       imageUrl: true,
+      templateId: true,
       createdAt: true,
       updatedAt: true,
-      template: {
-        select: {
-          id: true,
-          name: true,
-          quizType: true,
-          html: true,
-          css: true,
-        },
-      },
       _count: {
         select: {
           scheduledPost: true,
@@ -150,10 +142,32 @@ export async function GET(
 
     // Execute the query with connection retries
     const quiz = await withConnectionRetry(async () => {
-      return prisma.quiz.findUnique({
+      const quizData = await prisma.quiz.findUnique({
         where: { id },
         select: SELECT_FIELDS,
       });
+
+      if (quizData) {
+        // Fetch template data separately since the relation is no longer in the schema
+        const template = await prisma.template.findUnique({
+          where: { id: quizData.templateId },
+          select: {
+            id: true,
+            name: true,
+            quizType: true,
+            html: true,
+            css: true,
+          },
+        });
+
+        // Return quiz with template data
+        return {
+          ...quizData,
+          template
+        };
+      }
+
+      return quizData;
     });
 
     if (!quiz) {
@@ -229,8 +243,8 @@ export async function PUT(
     // Validate request body
     const validatedData = await updateQuizSchema.parseAsync(body);
 
-    // Optimize field selection
-    const SELECT_FIELDS = {
+    // Optimize field selection for PUT handler
+    const SELECT_FIELDS_PUT = {
       id: true,
       title: true,
       answer: true,
@@ -238,9 +252,22 @@ export async function PUT(
       variables: true,
       status: true,
       imageUrl: true,
+      templateId: true,
       createdAt: true,
       updatedAt: true,
-      template: {
+    };
+
+    // Update quiz data
+    const updatedQuiz = await withConnectionRetry(async () => {
+      const quizData = await prisma.quiz.update({
+        where: { id },
+        data: validatedData,
+        select: SELECT_FIELDS_PUT,
+      });
+
+      // Fetch template data separately
+      const template = await prisma.template.findUnique({
+        where: { id: quizData.templateId },
         select: {
           id: true,
           name: true,
@@ -248,35 +275,20 @@ export async function PUT(
           html: true,
           css: true,
         },
-      },
-      _count: {
-        select: {
-          scheduledPost: true,
-        },
-      },
-    };
-
-    // Execute the update with connection retries
-    const quiz = await withConnectionRetry(async () => {
-      return prisma.quiz.update({
-        where: { id },
-        data: {
-          title: validatedData.title,
-          variables: validatedData.variables,
-          templateId: validatedData.templateId,
-          answer: validatedData.answer,
-          solution: validatedData.solution,
-          status: validatedData.status,
-        },
-        select: SELECT_FIELDS,
       });
+
+      // Return quiz with template data
+      return {
+        ...quizData,
+        template
+      };
     });
 
     // Invalidate cache
     const cacheKey = buildCacheKey(id);
     delete cache[cacheKey];
 
-    const apiResponse = NextResponse.json(quiz);
+    const apiResponse = NextResponse.json(updatedQuiz);
     trackPerformance(apiResponse, requestPath, method, startTime);
     return apiResponse;
   } catch (error) {

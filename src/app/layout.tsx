@@ -1,6 +1,4 @@
-import { Footer } from "@/components/footer";
-import { Header } from "@/components/header";
-import { LoadingDelayToggle } from "@/components/LoadingDelayToggle";
+import { LayoutClient } from "@/components/layout-client";
 import { AuthErrorHandler } from '@/components/providers/AuthErrorHandler';
 import { SessionProvider } from '@/components/providers/SessionProvider';
 import { Toaster } from "@/components/toaster";
@@ -25,18 +23,13 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen bg-background antialiased">
-        <LoadingDelayProvider>
-          <SessionProvider>
-            <div className="relative flex min-h-screen flex-col">
-              <Header />
-              <main className="flex-1">{children}</main>
-              <Footer />
-            </div>
+        <SessionProvider>
+          <LoadingDelayProvider>
+            <LayoutClient>{children}</LayoutClient>
             <Toaster />
             <AuthErrorHandler />
-            {process.env.NODE_ENV === 'development' && <LoadingDelayToggle />}
-          </SessionProvider>
-        </LoadingDelayProvider>
+          </LoadingDelayProvider>
+        </SessionProvider>
       </body>
     </html>
   );
